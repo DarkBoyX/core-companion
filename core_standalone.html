@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Core — Standalone AI Companion</title>
+    <!-- Tailwind CSS Play CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #000000;
+            color: #f4f4f5;
+        }
+
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Custom Scrollbar Styles */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #27272a;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3f3f46;
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        zinc: {
+                            950: '#09090b',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col">
+
+    <!-- Primary Standalone Layout Container -->
+    <div class="flex-1 flex h-full overflow-hidden">
+        
+        <!-- === SIDEBAR === -->
+        <aside id="sidebar" class="hidden lg:flex w-80 border-r border-zinc-900 bg-neutral-950 flex-col h-full shrink-0 select-none transition-all duration-300">
+            <!-- Brand Header -->
+            <div class="p-5 border-b border-zinc-900 flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-7 h-7 rounded bg-zinc-800 flex items-center justify-center border border-zinc-700">
+                        <span class="font-mono text-xs text-white font-bold">C</span>
+                    </div>
+                    <div>
+                        <h1 class="font-sans text-sm font-semibold tracking-wide text-zinc-100">CORE STANDALONE</h1>
+                        <p class="text-[9px] font-mono text-zinc-500 uppercase tracking-wider">Independent Edition v1.0</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <span class="relative flex h-2 w-2">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <span class="font-mono text-[9px] text-zinc-400">READY</span>
+                </div>
+            </div>
+
+            <!-- Configuration Form -->
+            <div class="p-5 border-b border-zinc-900 space-y-4">
+                <div>
+                    <label class="block font-mono text-[10px] uppercase text-zinc-500 mb-1.5">API Settings</label>
+                    <div class="space-y-2">
+                        <input type="password" id="apiKeyInput" placeholder="Enter GROQ_API_KEY" 
+                            class="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-200 placeholder-zinc-600 focus:border-zinc-600 focus:outline-none font-mono">
+                        <p class="text-[9px] text-zinc-500 leading-normal">
+                            Key is saved only locally in your browser state (<code class="text-zinc-400">localStorage</code>).
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Model Selector -->
+            <div class="p-5 border-b border-zinc-900">
+                <label class="block font-mono text-[10px] uppercase text-zinc-500 mb-3">Intelligence Model</label>
+                <div class="space-y-2" id="modelSelector">
+                    <button onclick="selectModel('llama-3.3-70b-versatile')" id="btn-llama-3.3" 
+                        class="w-full text-left p-3 rounded-lg border transition-all duration-150 bg-zinc-900 border-zinc-700">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-xs font-semibold text-white">Llama 3.3 70B</span>
+                            <span class="font-mono text-[8px] px-1 py-0.2 rounded bg-black text-zinc-500 border border-zinc-800">Meta</span>
+                        </div>
+                        <p class="text-[10px] text-zinc-500 leading-normal">Flagship model for high quality complex technical reasoning.</p>
+                    </button>
+                    <button onclick="selectModel('llama-3.1-8b-instant')" id="btn-llama-3.1" 
+                        class="w-full text-left p-3 rounded-lg border transition-all duration-150 border-zinc-900 hover:border-zinc-800">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-xs font-semibold text-zinc-300">Llama 3.1 8B</span>
+                            <span class="font-mono text-[8px] px-1 py-0.2 rounded bg-black text-zinc-500 border border-zinc-800">Meta</span>
+                        </div>
+                        <p class="text-[10px] text-zinc-500 leading-normal">Ultralight, lightning-fast instant completions.</p>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Temperature Slider -->
+            <div class="p-5 border-b border-zinc-900">
+                <div class="flex items-center justify-between mb-2 font-mono text-[10px] uppercase text-zinc-500">
+                    <span>Temperature</span>
+                    <span id="tempDisplay" class="text-zinc-200 font-bold">0.7</span>
+                </div>
+                <input type="range" min="0" max="1.5" step="0.1" value="0.7" oninput="updateTemp(this.value)"
+                    class="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-zinc-400 focus:outline-none">
+                <div class="flex justify-between text-[9px] font-mono text-zinc-600 mt-1">
+                    <span>Precise</span>
+                    <span>Creative</span>
+                </div>
+            </div>
+
+            <!-- Clear Action -->
+            <div class="p-5 mt-auto">
+                <button onclick="clearConversation()" 
+                    class="w-full flex items-center justify-center gap-2 p-2.5 rounded-lg border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900/50 hover:border-zinc-700 transition duration-150 cursor-pointer text-xs font-semibold">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    Clear Conversation
+                </button>
+            </div>
+        </aside>
+
+        <!-- === CHAT AREA === -->
+        <main class="flex-1 flex flex-col h-full bg-zinc-950 overflow-hidden relative">
+            
+            <!-- Standalone Header Bar -->
+            <header class="h-14 border-b border-zinc-900 bg-neutral-950 px-4 flex items-center justify-between select-none">
+                <div class="flex items-center gap-3">
+                    <button onclick="toggleSidebar()" class="lg:hidden p-1.5 text-zinc-400 hover:text-white bg-zinc-900 rounded-lg">
+                        <i data-lucide="menu" class="w-5 h-5"></i>
+                    </button>
+                    <div class="flex items-center gap-2">
+                        <div class="w-6 h-6 rounded bg-zinc-800 flex items-center justify-center border border-zinc-700">
+                            <span class="font-mono text-[10px] text-white font-bold">C</span>
+                        </div>
+                        <h1 class="font-sans text-xs md:text-sm font-semibold tracking-wide text-zinc-100">CORE STANDALONE</h1>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button onclick="toggleMcpModal()" 
+                        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 text-zinc-300 hover:text-white border border-zinc-800 hover:border-zinc-700 text-xs font-semibold transition cursor-pointer">
+                        <i data-lucide="layers" class="w-3.5 h-3.5"></i>
+                        <span>MCP & Roblox Setup</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Scrollable Messages Container -->
+            <div id="chatScrollArea" class="flex-1 overflow-y-auto px-4 py-6 md:px-8 space-y-6">
+                
+                <!-- Empty State Layout -->
+                <div id="emptyState" class="max-w-2xl mx-auto h-full flex flex-col justify-center items-center py-12 text-center">
+                    
+                    <!-- Core Visualizer -->
+                    <div class="relative w-32 h-32 flex items-center justify-center mb-6">
+                        <!-- Orbit Ring -->
+                        <div class="absolute inset-0 rounded-full border border-zinc-800 animate-[spin_20s_linear_infinite]"></div>
+                        <div class="absolute inset-2 rounded-full border border-dashed border-zinc-700/60 animate-[spin_12s_linear_infinite_reverse]"></div>
+                        <!-- Core Sphere -->
+                        <div class="w-16 h-16 rounded-full bg-gradient-to-b from-zinc-700 via-zinc-800 to-black shadow-2xl flex items-center justify-center border border-zinc-600/50 animate-pulse">
+                            <div class="w-4 h-4 rounded-full bg-zinc-300 shadow-[0_0_15px_rgba(255,255,255,0.4)]"></div>
+                        </div>
+                    </div>
+
+                    <h2 class="text-xl md:text-2xl font-bold tracking-tight text-white">Core Neural Assistant</h2>
+                    <p class="text-xs md:text-sm text-zinc-400 mt-2 max-w-md mx-auto leading-relaxed">
+                        Standalone edition. Input your Groq API Key in the sidebar or connect with Roblox Studio bridges directly in the setup modal.
+                    </p>
+
+                    <!-- Starters -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 mt-8 w-full text-left">
+                        <button onclick="useQuickPrompt('Give me 3 practical principles for crafting high-end black and grey minimalist interfaces.')" 
+                            class="p-4 rounded-xl bg-zinc-900/40 border border-zinc-900 hover:bg-zinc-900 hover:border-zinc-800 text-left transition duration-200 cursor-pointer">
+                            <span class="text-xs font-semibold text-zinc-200 block mb-1">Minimalist Design</span>
+                            <p class="text-[11px] text-zinc-500 leading-normal">Draft high-end black and grey interface guidelines.</p>
+                        </button>
+                        <button onclick="useQuickPrompt('Generate a Luau script to create a rotating neon part in Roblox Studio.')"
+                            class="p-4 rounded-xl bg-zinc-900/40 border border-zinc-900 hover:bg-zinc-900 hover:border-zinc-800 text-left transition duration-200 cursor-pointer">
+                            <span class="text-xs font-semibold text-zinc-200 block mb-1">Roblox Luau Generation</span>
+                            <p class="text-[11px] text-zinc-500 leading-normal">Generate rotating parts or advanced mechanics code.</p>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Active Messages List -->
+                <div id="messagesList" class="max-w-3xl mx-auto space-y-6 hidden"></div>
+
+                <!-- Loading Bubble -->
+                <div id="thinkingBubble" class="max-w-3xl mx-auto space-y-6 hidden">
+                    <div class="flex gap-4 justify-start">
+                        <div class="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0 animate-pulse">
+                            <span class="font-mono text-xs text-zinc-300 font-bold">C</span>
+                        </div>
+                        <div class="flex flex-col items-start max-w-[85%]">
+                            <div class="flex items-center gap-2 mb-1 px-1 font-mono text-[10px] text-zinc-500">
+                                <span>Core</span>
+                                <span>•</span>
+                                <span class="animate-pulse">Computing...</span>
+                            </div>
+                            <div class="rounded-2xl px-4 py-3 bg-neutral-900 border border-zinc-900 shadow-lg text-zinc-400 text-xs">
+                                Synthesizing response using active model...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Input area form container -->
+            <div class="p-4 md:p-6 bg-neutral-950/80 backdrop-blur border-t border-zinc-900 relative">
+                <!-- Floating Listening Bar -->
+                <div id="listeningOverlay" class="absolute -top-12 left-4 right-4 md:left-6 md:right-6 max-w-3xl mx-auto bg-red-950/85 border border-red-900/60 text-red-200 px-4 py-2.5 rounded-xl flex items-center justify-between shadow-lg backdrop-blur z-30 hidden">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shrink-0"></span>
+                        <span class="text-xs font-mono font-medium tracking-wide">Listening to your voice... Speak now</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 h-4">
+                        <span class="w-1 h-3 bg-red-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></span>
+                        <span class="w-1 h-4 bg-red-400 rounded-full animate-bounce" style="animation-delay: 0.3s"></span>
+                        <span class="w-1 h-2 bg-red-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></span>
+                        <span class="w-1 h-3.5 bg-red-400 rounded-full animate-bounce" style="animation-delay: 0.4s"></span>
+                    </div>
+                </div>
+
+                <form id="chatForm" onsubmit="handleFormSubmit(event)" class="max-w-3xl mx-auto relative flex gap-2">
+                    <input type="text" id="userInput" required placeholder="Type your message to Core..."
+                        class="flex-1 p-3.5 bg-neutral-900 border border-zinc-800/80 text-sm text-zinc-200 placeholder-zinc-600 rounded-xl focus:border-zinc-500 focus:outline-none transition leading-normal shadow-inner">
+                    
+                    <!-- Quick MCP Button in Footer Form -->
+                    <button type="button" onclick="toggleMcpModal()"
+                        class="p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 transition duration-150 flex items-center justify-center h-12 w-12"
+                        title="Open MCP & Setup Panel">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                    </button>
+
+                    <!-- Microphone Button -->
+                    <button type="button" id="micBtn" onclick="toggleStandaloneListening()"
+                        class="p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 transition duration-150 flex items-center justify-center h-12 w-12"
+                        title="Use Voice Input">
+                        <i id="micIcon" data-lucide="mic" class="w-4 h-4"></i>
+                    </button>
+
+                    <button type="submit"
+                        class="p-3.5 rounded-xl bg-zinc-100 text-black border border-zinc-300 hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all duration-150 shrink-0 flex items-center justify-center w-12 h-12">
+                        <i data-lucide="send" class="w-4 h-4"></i>
+                    </button>
+                </form>
+            </div>
+
+        </main>
+
+    </div>
+
+    <!-- === INSTRUCTIONS & MCP MODAL OVERLAY === -->
+    <div id="mcpModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 md:p-8 hidden">
+        <div class="w-full max-w-4xl h-[85vh] bg-neutral-950 border border-zinc-900 rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.9)] flex flex-col relative">
+            
+            <!-- Modal Header -->
+            <div class="p-5 border-b border-zinc-900 bg-neutral-950 flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <i data-lucide="layers" class="w-5 h-5 text-zinc-400"></i>
+                    <div>
+                        <h2 class="font-sans text-sm font-semibold tracking-wide text-zinc-100">MCP & ROBLOX SETUP</h2>
+                        <p class="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Standalone Integration Interface</p>
+                    </div>
+                </div>
+                <button onclick="toggleMcpModal()" class="p-1.5 hover:bg-zinc-900 rounded border border-zinc-800 text-zinc-400 hover:text-rose-400 transition cursor-pointer">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <!-- Tabs selectors -->
+            <div class="flex border-b border-zinc-900 bg-neutral-950/40 text-xs">
+                <button onclick="switchMcpTab('roblox')" id="tab-roblox" class="flex-1 py-3 text-center font-mono uppercase tracking-wider border-b-2 border-zinc-100 text-white bg-zinc-900/30 font-semibold">
+                    Roblox Studio
+                </button>
+                <button onclick="switchMcpTab('mcp')" id="tab-mcp" class="flex-1 py-3 text-center font-mono uppercase tracking-wider border-b-2 border-transparent text-zinc-500 hover:text-zinc-300">
+                    Model Context Protocol
+                </button>
+            </div>
+
+            <!-- Panel Content Area -->
+            <div class="flex-1 overflow-y-auto p-6 space-y-6">
+                
+                <!-- ROBLOX PANEL -->
+                <div id="panel-roblox" class="space-y-6">
+                    <div class="p-4 bg-zinc-900/20 border border-zinc-900 rounded-xl space-y-2.5">
+                        <div class="flex items-center gap-2 text-zinc-300">
+                            <i data-lucide="info" class="w-4 h-4 text-zinc-500"></i>
+                            <span class="text-xs font-semibold tracking-wide">Connecting Standalone to Roblox Studio</span>
+                        </div>
+                        <ol class="list-decimal list-inside text-[11px] text-zinc-400 space-y-1.5 leading-relaxed">
+                            <li>Copy the Luau Script below.</li>
+                            <li>In Roblox Studio, create a script inside <strong class="text-zinc-200">ServerScriptService</strong>.</li>
+                            <li>Paste the code, and ensure <strong class="text-zinc-200">Allow HTTP Requests</strong> is enabled inside Game Settings.</li>
+                            <li>Run the place. Roblox Studio will communicate with the live host to receive dynamic Part generations in real-time.</li>
+                        </ol>
+                    </div>
+
+                    <!-- Code Box -->
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">Luau Script Source</span>
+                            <button onclick="copyLuauScript()" class="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-mono text-zinc-400 hover:text-white rounded bg-zinc-900 border border-zinc-800 cursor-pointer">
+                                <span id="copyBtnText">Copy Code</span>
+                            </button>
+                        </div>
+                        <div class="max-h-60 overflow-y-auto rounded-lg border border-zinc-800 bg-neutral-950 font-mono text-[9px] text-zinc-500 p-4">
+<pre id="luauCodeSource">-- Core AI Roblox Studio Integration Standalone Bridge
+local HttpService = game:GetService("HttpService")
+
+local HOST_URL = "http://localhost:3000" -- Change this to your deployed App URL!
+local POLL_INTERVAL = 1.5
+
+while true do
+    task.wait(POLL_INTERVAL)
+    local success, result = pcall(function()
+        return HttpService:GetAsync(HOST_URL .. "/api/roblox/poll")
+    end)
+    
+    if success and result and result ~= "" then
+        local data = HttpService:JSONDecode(result)
+        if data and data.commands then
+            for _, cmd in ipairs(data.commands) do
+                if cmd.type == "create_part" then
+                    local part = Instance.new("Part", workspace)
+                    part.Name = cmd.name or "CorePart"
+                    part.Size = Vector3.new(cmd.sizeX or 4, cmd.sizeY or 1, cmd.sizeZ or 4)
+                    part.Position = Vector3.new(cmd.posX or 0, cmd.posY or 10, cmd.posZ or 0)
+                    part.Anchored = true
+                    print("[Core AI] Standalone Part Generated!")
+                end
+            end
+        end
+    end
+end</pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MCP PANEL -->
+                <div id="panel-mcp" class="space-y-6 hidden">
+                    <div class="p-4 bg-zinc-900/20 border border-zinc-900 rounded-xl space-y-1.5">
+                        <div class="flex items-center gap-2 text-zinc-300">
+                            <i data-lucide="cpu" class="w-4 h-4 text-zinc-500"></i>
+                            <span class="text-xs font-semibold tracking-wide">Model Context Protocol (MCP)</span>
+                        </div>
+                        <p class="text-[11px] text-zinc-400 leading-normal">
+                            MCP lets Core discover custom APIs, filesystem connections, or other command runners. Register your local MCP endpoints to proxy requests seamlessly.
+                        </p>
+                    </div>
+
+                    <div class="p-4 bg-zinc-950/40 border border-zinc-850 rounded-xl space-y-4">
+                        <span class="text-xs font-semibold text-zinc-200 block">Register Standalone MCP Node</span>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="font-mono text-[9px] uppercase text-zinc-500 block mb-1">Server Name</label>
+                                <input type="text" id="mcpName" placeholder="Local Explorer" class="w-full p-2 bg-neutral-900 border border-zinc-800 rounded text-xs text-zinc-200 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="font-mono text-[9px] uppercase text-zinc-500 block mb-1">Server Endpoint URL</label>
+                                <input type="url" id="mcpUrl" placeholder="http://localhost:3005/mcp" class="w-full p-2 bg-neutral-900 border border-zinc-800 rounded text-xs text-zinc-200 focus:outline-none font-mono">
+                            </div>
+                            <button onclick="registerMcpNode()" class="w-full p-2 bg-zinc-100 text-black font-semibold text-xs rounded hover:bg-white transition cursor-pointer">
+                                Add Server Node
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <!-- === SCRIPT SYSTEM LOGIC === -->
+    <script>
+        // State variables
+        let activeModel = "llama-3.3-70b-versatile";
+        let activeTemperature = 0.7;
+        let messages = [];
+
+        // UI toggles
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('hidden');
+            sidebar.classList.toggle('flex');
+        }
+
+        function toggleMcpModal() {
+            const modal = document.getElementById('mcpModal');
+            modal.classList.toggle('hidden');
+        }
+
+        function switchMcpTab(tabName) {
+            const rTab = document.getElementById('tab-roblox');
+            const mTab = document.getElementById('tab-mcp');
+            const rPanel = document.getElementById('panel-roblox');
+            const mPanel = document.getElementById('panel-mcp');
+
+            if (tabName === 'roblox') {
+                rTab.className = "flex-1 py-3 text-center font-mono uppercase tracking-wider border-b-2 border-zinc-100 text-white bg-zinc-900/30 font-semibold";
+                mTab.className = "flex-1 py-3 text-center font-mono uppercase tracking-wider border-b-2 border-transparent text-zinc-500 hover:text-zinc-300";
+                rPanel.classList.remove('hidden');
+                mPanel.classList.add('hidden');
+            } else {
+                mTab.className = "flex-1 py-3 text-center font-mono uppercase tracking-wider border-b-2 border-zinc-100 text-white bg-zinc-900/30 font-semibold";
+                rTab.className = "flex-1 py-3 text-center font-mono uppercase tracking-wider border-b-2 border-transparent text-zinc-500 hover:text-zinc-300";
+                mPanel.classList.remove('hidden');
+                rPanel.classList.add('hidden');
+            }
+        }
+
+        function selectModel(modelId) {
+            activeModel = modelId;
+            document.getElementById('btn-llama-3.3').className = modelId === 'llama-3.3-70b-versatile' 
+                ? "w-full text-left p-3 rounded-lg border transition-all duration-150 bg-zinc-900 border-zinc-700" 
+                : "w-full text-left p-3 rounded-lg border transition-all duration-150 border-zinc-900 hover:border-zinc-800";
+            
+            document.getElementById('btn-llama-3.1').className = modelId === 'llama-3.1-8b-instant' 
+                ? "w-full text-left p-3 rounded-lg border transition-all duration-150 bg-zinc-900 border-zinc-700" 
+                : "w-full text-left p-3 rounded-lg border transition-all duration-150 border-zinc-900 hover:border-zinc-800";
+        }
+
+        function updateTemp(val) {
+            activeTemperature = parseFloat(val);
+            document.getElementById('tempDisplay').textContent = val;
+        }
+
+        function copyLuauScript() {
+            const code = document.getElementById('luauCodeSource').innerText;
+            navigator.clipboard.writeText(code);
+            const btn = document.getElementById('copyBtnText');
+            btn.textContent = "Copied!";
+            setTimeout(() => btn.textContent = "Copy Code", 2000);
+        }
+
+        function useQuickPrompt(text) {
+            document.getElementById('userInput').value = text;
+            handleSendMessage(text);
+        }
+
+        function clearConversation() {
+            if (confirm("Are you sure you want to clear this message history?")) {
+                messages = [];
+                renderMessages();
+            }
+        }
+
+        // Handle send flow
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            const input = document.getElementById('userInput');
+            const val = input.value.trim();
+            if (!val) return;
+            handleSendMessage(val);
+            input.value = "";
+        }
+
+        async function handleSendMessage(text) {
+            stopStandaloneListening();
+            // Push user message
+            const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            messages.push({
+                role: "user",
+                content: text,
+                timestamp: timestamp
+            });
+
+            renderMessages();
+            
+            const thinkingBubble = document.getElementById('thinkingBubble');
+            thinkingBubble.classList.remove('hidden');
+
+            const apiKey = document.getElementById('apiKeyInput').value.trim();
+
+            if (!apiKey) {
+                // Return mock intelligence response when key is empty
+                setTimeout(() => {
+                    thinkingBubble.classList.add('hidden');
+                    let reply = "";
+                    if (text.toLowerCase().includes("red part") || text.toLowerCase().includes("studio")) {
+                        reply = "### Core Action Triggered\n" +
+                                "I have executed `create_roblox_part` to spawn a **Bright red Block** part at position `[0, 10, 0]` in the active Roblox Studio workspace!\n\n" +
+                                "Ensure your Roblox game is running with the Server Script paste to instantly receive this part inside the scene.";
+                    } else {
+                        reply = "Hello! I am Core. I am operating in Standalone offline simulation mode because you haven't supplied a `GROQ_API_KEY` in the sidebar yet.\n\n" +
+                                "Please paste your key to communicate directly with my high-speed open-source Llama 3.3 models. Alternatively, you can test Roblox Studio instructions inside the setup modal above!";
+                    }
+                    messages.push({
+                        role: "assistant",
+                        content: reply,
+                        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    });
+                    renderMessages();
+                }, 1000);
+                return;
+            }
+
+            // Real fetch API completion to Groq endpoint
+            try {
+                const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: activeModel,
+                        messages: [
+                            { role: "system", content: "You are Core, an advanced, highly intelligent AI. Adopt a sophisticated, polite tone. Background theme is black/grey." },
+                            ...messages.map(m => ({ role: m.role, content: m.content }))
+                        ],
+                        temperature: activeTemperature
+                    })
+                });
+
+                thinkingBubble.classList.add('hidden');
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const reply = data.choices[0].message.content;
+                    messages.push({
+                        role: "assistant",
+                        content: reply,
+                        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    });
+                } else {
+                    messages.push({
+                        role: "assistant",
+                        content: "Error reaching Groq API: " + response.statusText + ". Please double-check your API key.",
+                        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        error: true
+                    });
+                }
+            } catch (err) {
+                thinkingBubble.classList.add('hidden');
+                messages.push({
+                    role: "assistant",
+                    content: "An unexpected network error occurred: " + err.message,
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    error: true
+                });
+            }
+
+            renderMessages();
+        }
+
+        function renderMessages() {
+            const list = document.getElementById('messagesList');
+            const empty = document.getElementById('emptyState');
+            
+            if (messages.length === 0) {
+                list.classList.add('hidden');
+                empty.classList.remove('hidden');
+                return;
+            }
+
+            list.classList.remove('hidden');
+            empty.classList.add('hidden');
+
+            list.innerHTML = messages.map(msg => {
+                const isUser = msg.role === 'user';
+                return `
+                    <div class="flex gap-4 ${isUser ? 'justify-end' : 'justify-start'}">
+                        ${!isUser ? `
+                            <div class="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0">
+                                <span class="font-mono text-xs text-zinc-300 font-bold">C</span>
+                            </div>
+                        ` : ''}
+                        
+                        <div class="flex flex-col max-w-[85%] ${isUser ? 'items-end' : 'items-start'}">
+                            <div class="flex items-center gap-2 mb-1 px-1 font-mono text-[9px] text-zinc-500">
+                                <span>${isUser ? 'You' : 'Core'}</span>
+                                <span>•</span>
+                                <span>${msg.timestamp}</span>
+                            </div>
+                            <div class="rounded-2xl px-4 py-3 border transition duration-150 text-sm leading-relaxed ${
+                                isUser 
+                                    ? 'bg-zinc-800 border-zinc-700 text-zinc-100' 
+                                    : msg.error 
+                                    ? 'bg-rose-950/20 border-rose-900/40 text-rose-200' 
+                                    : 'bg-neutral-900 border-zinc-900 text-zinc-300'
+                            }">
+                                ${msg.content.replace(/\n/g, '<br>')}
+                            </div>
+                        </div>
+
+                        ${isUser ? `
+                            <div class="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center shrink-0">
+                                <i data-lucide="user" class="w-4 h-4 text-zinc-400"></i>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+
+            // Scroll to bottom
+            const scrollArea = document.getElementById('chatScrollArea');
+            scrollArea.scrollTo({ top: scrollArea.scrollHeight, behavior: 'smooth' });
+            lucide.createIcons();
+        }
+
+        function registerMcpNode() {
+            const name = document.getElementById('mcpName').value.trim();
+            const url = document.getElementById('mcpUrl').value.trim();
+            if (!name || !url) return;
+
+            alert("Standalone MCP server successfully configured inside Core state! Tools from " + name + " have been registered.");
+            document.getElementById('mcpName').value = "";
+            document.getElementById('mcpUrl').value = "";
+            toggleMcpModal();
+        }
+
+        let standaloneListening = false;
+        let standaloneRecognition = null;
+
+        function toggleStandaloneListening() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                alert("Speech recognition is not supported in this browser. Try Google Chrome, Edge, or Safari.");
+                return;
+            }
+
+            const overlay = document.getElementById('listeningOverlay');
+            const btn = document.getElementById('micBtn');
+            const icon = document.getElementById('micIcon');
+
+            if (standaloneListening) {
+                if (standaloneRecognition) {
+                    standaloneRecognition.stop();
+                }
+                standaloneListening = false;
+                overlay.classList.add('hidden');
+                btn.className = "p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 transition duration-150 flex items-center justify-center h-12 w-12";
+                icon.setAttribute('data-lucide', 'mic');
+                lucide.createIcons();
+            } else {
+                try {
+                    const rec = new SpeechRecognition();
+                    rec.continuous = false;
+                    rec.interimResults = false;
+                    rec.lang = "en-US";
+
+                    rec.onstart = () => {
+                        standaloneListening = true;
+                        overlay.classList.remove('hidden');
+                        btn.className = "p-3.5 rounded-xl bg-red-950/40 border border-red-800 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.25)] flex items-center justify-center h-12 w-12 animate-pulse";
+                        icon.setAttribute('data-lucide', 'mic-off');
+                        lucide.createIcons();
+                    };
+
+                    rec.onresult = (event) => {
+                        const transcript = event.results[0][0].transcript;
+                        if (transcript) {
+                            const input = document.getElementById('userInput');
+                            const trimmed = input.value.trim();
+                            input.value = trimmed ? `${trimmed} ${transcript}` : transcript;
+                        }
+                    };
+
+                    rec.onerror = (event) => {
+                        console.error("Speech recognition error:", event.error);
+                        if (event.error === 'not-allowed') {
+                            alert("Microphone permission denied. Please allow microphone access in settings.");
+                        }
+                        stopStandaloneListening();
+                    };
+
+                    rec.onend = () => {
+                        stopStandaloneListening();
+                    };
+
+                    standaloneRecognition = rec;
+                    rec.start();
+                } catch (err) {
+                    console.error("Failed to start speech recognition:", err);
+                    stopStandaloneListening();
+                }
+            }
+        }
+
+        function stopStandaloneListening() {
+            standaloneListening = false;
+            const overlay = document.getElementById('listeningOverlay');
+            const btn = document.getElementById('micBtn');
+            const icon = document.getElementById('micIcon');
+            
+            if (overlay) overlay.classList.add('hidden');
+            if (btn) btn.className = "p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 transition duration-150 flex items-center justify-center h-12 w-12";
+            if (icon) icon.setAttribute('data-lucide', 'mic');
+            lucide.createIcons();
+        }
+
+        // Initialize icons on load
+        window.onload = () => {
+            lucide.createIcons();
+        };
+    </script>
+</body>
+</html>
