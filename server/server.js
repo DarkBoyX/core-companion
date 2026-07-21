@@ -13,8 +13,28 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// session code -> { commands: [], lastSeen, robloxUser: null }
+// Simple health check — also handy for pinging the service awake if you're
+// on Render's free tier (which sleeps after ~15 min of no traffic and can
+// take 30-50s to spin back up on the next request).
+app.get("/", (req, res) => res.json({ ok: true, sessions: sessions.size }));
+
+// session code -> { commands: [], lastSeen, createdAt, robloxUser: null }
 const sessions = new Map();
+
+// How recently the Studio plugin must have polled for us to consider it
+// "actually online" right now. The plugin polls every 1.5s, so anything
+// beyond a few missed polls means Studio was closed / lost connection.
+const STUDIO_ONLINE_WINDOW_MS = 5000;
+
+// Sessions nobody has touched in a while are cleaned up so memory doesn't
+// grow forever on a long-running instance.
+const SESSION_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, session] of sessions) {
+    if (now - session.lastSeen > SESSION_TTL_MS) sessions.delete(code);
+  }
+}, 30 * 60 * 1000);
 
 function makeCode() {
   // Short, human-typeable pairing code, e.g. "7K4P-XQ2M"
@@ -27,24 +47,38 @@ function makeCode() {
 // --- 1. Studio plugin calls this once on startup to create a session ---
 app.post("/api/session/create", (req, res) => {
   const code = makeCode();
-  sessions.set(code, { commands: [], lastSeen: Date.now(), robloxUser: null });
+  sessions.set(code, {
+    commands: [],
+    lastSeen: Date.now(),   // last time the Studio plugin actually polled us
+    createdAt: Date.now(),
+    robloxUser: null,       // set once the website "links" this code
+  });
   res.json({ code });
 });
 
 // --- 2. Website calls this when the user types/confirms the pairing code ---
+// NOTE: this only proves the CODE is valid — it does NOT prove Studio is
+// currently open and polling. Use /api/session/status's `studioOnline`
+// field for that (it's driven by the plugin's poll heartbeat below).
 app.post("/api/session/link", (req, res) => {
   const { code, robloxUser } = req.body;
   const session = sessions.get(code);
   if (!session) return res.status(404).json({ error: "Unknown or expired code" });
   session.robloxUser = robloxUser || session.robloxUser || "web-user";
-  res.json({ ok: true });
+  res.json({ ok: true, studioOnline: Date.now() - session.lastSeen < STUDIO_ONLINE_WINDOW_MS });
 });
 
 app.get("/api/session/status", (req, res) => {
   const { code } = req.query;
   const session = sessions.get(code);
   if (!session) return res.status(404).json({ error: "Unknown or expired code" });
-  res.json({ linked: !!session.robloxUser, robloxUser: session.robloxUser });
+  res.json({
+    linked: !!session.robloxUser,
+    robloxUser: session.robloxUser,
+    // True only if the Studio plugin has polled us within the last few
+    // seconds. This is the source of truth for "is Studio actually here".
+    studioOnline: Date.now() - session.lastSeen < STUDIO_ONLINE_WINDOW_MS,
+  });
 });
 
 // --- 3. Website pushes a structured command after the AI decides on one ---
