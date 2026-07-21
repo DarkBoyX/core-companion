@@ -129,6 +129,21 @@
                 </div>
             </div>
 
+            <!-- Studio Bridge Connect -->
+            <div class="p-5 border-b border-zinc-900 space-y-2.5">
+                <label class="block font-mono text-[10px] uppercase text-zinc-500 mb-1">Roblox Studio Bridge</label>
+                <div id="bridgeStatus" class="text-[11px] font-mono text-rose-400 flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Not connected
+                </div>
+                <input type="text" id="bridgeCodeInput" placeholder="Enter code from Studio plugin (e.g. 7K4P-XQ2M)"
+                    class="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-200 placeholder-zinc-600 focus:border-zinc-600 focus:outline-none font-mono">
+                <button onclick="connectStudioBridge()"
+                    class="w-full p-2 bg-zinc-100 text-black font-semibold text-xs rounded-lg hover:bg-white transition cursor-pointer">
+                    Connect
+                </button>
+                <p class="text-[9px] text-zinc-500 leading-normal">Open the Core AI plugin in Studio, copy the pairing code it shows, and paste it here.</p>
+            </div>
+
             <!-- Clear Action -->
             <div class="p-5 mt-auto">
                 <button onclick="clearConversation()" 
@@ -310,50 +325,19 @@
                             <span class="text-xs font-semibold tracking-wide">Connecting Standalone to Roblox Studio</span>
                         </div>
                         <ol class="list-decimal list-inside text-[11px] text-zinc-400 space-y-1.5 leading-relaxed">
-                            <li>Copy the Luau Script below.</li>
-                            <li>In Roblox Studio, create a script inside <strong class="text-zinc-200">ServerScriptService</strong>.</li>
-                            <li>Paste the code, and ensure <strong class="text-zinc-200">Allow HTTP Requests</strong> is enabled inside Game Settings.</li>
-                            <li>Run the place. Roblox Studio will communicate with the live host to receive dynamic Part generations in real-time.</li>
+                            <li>Install the <strong class="text-zinc-200">Core AI</strong> Studio plugin (see <code class="text-zinc-300">roblox_plugin/CoreAI_Plugin.server.lua</code>).</li>
+                            <li>Run the bridge server (<code class="text-zinc-300">server/server.js</code>) and point both the plugin and this page at it.</li>
+                            <li>Open the plugin's panel in Studio — it shows a pairing code like <code class="text-zinc-300">7K4P-XQ2M</code>.</li>
+                            <li>Paste that code into the <strong class="text-zinc-200">Roblox Studio Bridge</strong> box in the sidebar and click Connect.</li>
+                            <li>Ask Core to make a change ("create a red part") — it'll show up in your Studio workspace live.</li>
                         </ol>
                     </div>
 
                     <!-- Code Box -->
                     <div class="space-y-2">
-                        <div class="flex items-center justify-between">
-                            <span class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">Luau Script Source</span>
-                            <button onclick="copyLuauScript()" class="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-mono text-zinc-400 hover:text-white rounded bg-zinc-900 border border-zinc-800 cursor-pointer">
-                                <span id="copyBtnText">Copy Code</span>
-                            </button>
-                        </div>
-                        <div class="max-h-60 overflow-y-auto rounded-lg border border-zinc-800 bg-neutral-950 font-mono text-[9px] text-zinc-500 p-4">
-<pre id="luauCodeSource">-- Core AI Roblox Studio Integration Standalone Bridge
-local HttpService = game:GetService("HttpService")
-
-local HOST_URL = "http://localhost:3000" -- Change this to your deployed App URL!
-local POLL_INTERVAL = 1.5
-
-while true do
-    task.wait(POLL_INTERVAL)
-    local success, result = pcall(function()
-        return HttpService:GetAsync(HOST_URL .. "/api/roblox/poll")
-    end)
-    
-    if success and result and result ~= "" then
-        local data = HttpService:JSONDecode(result)
-        if data and data.commands then
-            for _, cmd in ipairs(data.commands) do
-                if cmd.type == "create_part" then
-                    local part = Instance.new("Part", workspace)
-                    part.Name = cmd.name or "CorePart"
-                    part.Size = Vector3.new(cmd.sizeX or 4, cmd.sizeY or 1, cmd.sizeZ or 4)
-                    part.Position = Vector3.new(cmd.posX or 0, cmd.posY or 10, cmd.posZ or 0)
-                    part.Anchored = true
-                    print("[Core AI] Standalone Part Generated!")
-                end
-            end
-        end
-    end
-end</pre>
+                        <span class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider block">Plugin Source</span>
+                        <div class="rounded-lg border border-zinc-800 bg-neutral-950 font-mono text-[10px] text-zinc-500 p-4 leading-relaxed">
+                            The full plugin lives in <span class="text-zinc-300">roblox_plugin/CoreAI_Plugin.server.lua</span> in the project bundle — it creates the pairing session, shows the dock widget UI, polls the bridge server, and runs a whitelisted set of safe actions (create_part, set_color, set_size, set_position, delete_part, delete_all). It never executes arbitrary code sent from the web.
                         </div>
                     </div>
                 </div>
@@ -399,6 +383,70 @@ end</pre>
         let activeModel = "llama-3.3-70b-versatile";
         let activeTemperature = 0.7;
         let messages = [];
+
+        // ===== Studio Bridge =====
+        const BRIDGE_URL = "http://localhost:3000"; // change to your deployed bridge server
+        let bridgeCode = localStorage.getItem("coreBridgeCode") || null;
+
+        async function connectStudioBridge() {
+            const input = document.getElementById('bridgeCodeInput');
+            const code = input.value.trim().toUpperCase();
+            if (!code) return;
+            try {
+                const res = await fetch(`${BRIDGE_URL}/api/session/link`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ code, robloxUser: "web-user" })
+                });
+                if (res.ok) {
+                    bridgeCode = code;
+                    localStorage.setItem("coreBridgeCode", code);
+                    setBridgeStatus(true);
+                } else {
+                    alert("Couldn't find that code. Check the plugin panel in Studio and try again.");
+                }
+            } catch (err) {
+                alert("Couldn't reach the bridge server: " + err.message);
+            }
+        }
+
+        function setBridgeStatus(connected) {
+            const el = document.getElementById('bridgeStatus');
+            el.innerHTML = connected
+                ? `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Connected to Studio`
+                : `<span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Not connected`;
+            el.className = connected
+                ? "text-[11px] font-mono text-emerald-400 flex items-center gap-1.5"
+                : "text-[11px] font-mono text-rose-400 flex items-center gap-1.5";
+        }
+
+        // Sends one whitelisted action to the plugin's command queue.
+        async function sendStudioCommand(command) {
+            if (!bridgeCode) return { ok: false, reason: "not_connected" };
+            try {
+                const res = await fetch(`${BRIDGE_URL}/api/roblox/command`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ code: bridgeCode, command })
+                });
+                return { ok: res.ok };
+            } catch (err) {
+                return { ok: false, reason: err.message };
+            }
+        }
+
+        // Pulls a ```core-action { ... } ``` JSON block out of the AI's reply, if present.
+        function extractStudioAction(text) {
+            const match = text.match(/```core-action\s*([\s\S]*?)```/i);
+            if (!match) return null;
+            try {
+                return JSON.parse(match[1].trim());
+            } catch {
+                return null;
+            }
+        }
+
+        if (bridgeCode) setBridgeStatus(true);
 
         // UI toggles
         function toggleSidebar() {
@@ -500,9 +548,12 @@ end</pre>
                     thinkingBubble.classList.add('hidden');
                     let reply = "";
                     if (text.toLowerCase().includes("red part") || text.toLowerCase().includes("studio")) {
-                        reply = "### Core Action Triggered\n" +
-                                "I have executed `create_roblox_part` to spawn a **Bright red Block** part at position `[0, 10, 0]` in the active Roblox Studio workspace!\n\n" +
-                                "Ensure your Roblox game is running with the Server Script paste to instantly receive this part inside the scene.";
+                        if (bridgeCode) {
+                            sendStudioCommand({ action: "create_part", name: "CoreAIPart", color: "Really red", posX: 0, posY: 10, posZ: 0 });
+                            reply = "Done — I sent a `create_part` command to your connected Studio session. You should see a red part appear in the workspace within a couple seconds.";
+                        } else {
+                            reply = "I'd create that part, but Studio isn't connected yet. Open the Core AI plugin in Studio, grab the pairing code it shows, and paste it into the **Roblox Studio Bridge** box in the sidebar.";
+                        }
                     } else {
                         reply = "Hello! I am Core. I am operating in Standalone offline simulation mode because you haven't supplied a `GROQ_API_KEY` in the sidebar yet.\n\n" +
                                 "Please paste your key to communicate directly with my high-speed open-source Llama 3.3 models. Alternatively, you can test Roblox Studio instructions inside the setup modal above!";
@@ -528,7 +579,15 @@ end</pre>
                     body: JSON.stringify({
                         model: activeModel,
                         messages: [
-                            { role: "system", content: "You are Core, an advanced, highly intelligent AI. Adopt a sophisticated, polite tone. Background theme is black/grey." },
+                            { role: "system", content: "You are Core, an advanced, highly intelligent AI. Adopt a sophisticated, polite tone. " +
+                                "You can control a connected Roblox Studio session, but ONLY through this exact mechanism: " +
+                                "when the user asks you to create, color, move, resize, or delete something in the workspace, " +
+                                "include ONE fenced block in your reply formatted exactly like this:\n" +
+                                "```core-action\n{\"action\":\"create_part\",\"name\":\"CoreAIPart\",\"color\":\"Really red\",\"sizeX\":4,\"sizeY\":1,\"sizeZ\":4,\"posX\":0,\"posY\":10,\"posZ\":0}\n```\n" +
+                                "Valid action values are: create_part, set_color, set_size, set_position, delete_part, delete_all. " +
+                                "Roblox color names must be valid BrickColor names (e.g. \"Really red\", \"Bright blue\", \"Lime green\"). " +
+                                "Only emit this block when the user actually wants a Studio change — never for normal conversation. " +
+                                "Write a short natural-language sentence around the block explaining what you did." },
                             ...messages.map(m => ({ role: m.role, content: m.content }))
                         ],
                         temperature: activeTemperature
@@ -539,7 +598,22 @@ end</pre>
 
                 if (response.ok) {
                     const data = await response.json();
-                    const reply = data.choices[0].message.content;
+                    let reply = data.choices[0].message.content;
+
+                    const action = extractStudioAction(reply);
+                    if (action) {
+                        if (bridgeCode) {
+                            const result = await sendStudioCommand(action);
+                            reply += result.ok
+                                ? "\n\n✅ Sent to your connected Studio session."
+                                : "\n\n⚠️ Couldn't reach Studio — is the plugin running and connected?";
+                        } else {
+                            reply += "\n\n⚠️ Studio isn't connected. Paste the pairing code from the Core AI plugin into the sidebar first.";
+                        }
+                        // Hide the raw JSON block from the chat bubble, keep it human-readable
+                        reply = reply.replace(/```core-action\s*[\s\S]*?```/i, "").trim();
+                    }
+
                     messages.push({
                         role: "assistant",
                         content: reply,
