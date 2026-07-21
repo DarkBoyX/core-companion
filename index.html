@@ -4,69 +4,63 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Core — Standalone AI Companion</title>
-    <!-- Tailwind CSS Play CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
-        
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
         body {
             font-family: 'Inter', sans-serif;
             background-color: #000000;
             color: #f4f4f5;
         }
 
-        .font-mono {
-            font-family: 'JetBrains Mono', monospace;
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); }
+        ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+
+        .core-glow {
+            box-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 8px 30px -8px rgba(0,0,0,0.9);
         }
 
-        /* Custom Scrollbar Styles */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
+        .core-gradient-text {
+            background: linear-gradient(135deg, #f4f4f5 0%, #a1a1aa 60%, #71717a 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
         }
-        ::-webkit-scrollbar-track {
-            background: rgba(0, 0, 0, 0.2);
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-        ::-webkit-scrollbar-thumb {
-            background: #27272a;
-            border-radius: 3px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #3f3f46;
-        }
+        .msg-in { animation: fadeInUp 0.25s ease-out; }
     </style>
     <script>
         tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        zinc: {
-                            950: '#09090b',
-                        }
-                    }
-                }
-            }
+            theme: { extend: { colors: { zinc: { 950: '#09090b' } } } }
         }
     </script>
 </head>
 <body class="h-screen w-screen overflow-hidden flex flex-col">
 
-    <!-- Primary Standalone Layout Container -->
     <div class="flex-1 flex h-full overflow-hidden">
-        
+
         <!-- === SIDEBAR === -->
         <aside id="sidebar" class="hidden lg:flex w-80 border-r border-zinc-900 bg-neutral-950 flex-col h-full shrink-0 select-none transition-all duration-300">
+
             <!-- Brand Header -->
             <div class="p-5 border-b border-zinc-900 flex items-center justify-between">
                 <div class="flex items-center gap-2.5">
-                    <div class="w-7 h-7 rounded bg-zinc-800 flex items-center justify-center border border-zinc-700">
+                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-zinc-700 to-zinc-900 flex items-center justify-center border border-zinc-700 core-glow">
                         <span class="font-mono text-xs text-white font-bold">C</span>
                     </div>
                     <div>
-                        <h1 class="font-sans text-sm font-semibold tracking-wide text-zinc-100">CORE STANDALONE</h1>
-                        <p class="text-[9px] font-mono text-zinc-500 uppercase tracking-wider">Independent Edition v1.0</p>
+                        <h1 class="font-sans text-sm font-bold tracking-wide core-gradient-text">CORE STANDALONE</h1>
+                        <p class="text-[9px] font-mono text-zinc-500 uppercase tracking-wider">Independent Edition v1.2</p>
                     </div>
                 </div>
                 <div class="flex items-center gap-1.5">
@@ -78,76 +72,81 @@
                 </div>
             </div>
 
-            <!-- Configuration Form -->
-            <div class="p-5 border-b border-zinc-900 space-y-4">
-                <div>
-                    <label class="block font-mono text-[10px] uppercase text-zinc-500 mb-1.5">API Settings</label>
-                    <div class="space-y-2">
-                        <input type="password" id="apiKeyInput" placeholder="Enter GROQ_API_KEY" 
-                            class="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-200 placeholder-zinc-600 focus:border-zinc-600 focus:outline-none font-mono">
-                        <p class="text-[9px] text-zinc-500 leading-normal">
-                            Key is saved only locally in your browser state (<code class="text-zinc-400">localStorage</code>).
-                        </p>
+            <div class="flex-1 overflow-y-auto">
+
+                <!-- Configuration Form -->
+                <div class="p-5 border-b border-zinc-900 space-y-3">
+                    <label class="block font-mono text-[10px] uppercase tracking-wider text-zinc-500">API Settings</label>
+                    <input type="password" id="apiKeyInput" placeholder="Enter GROQ_API_KEY"
+                        class="w-full p-2.5 bg-zinc-900/70 border border-zinc-800 rounded-lg text-xs text-zinc-200 placeholder-zinc-600 focus:border-zinc-500 focus:outline-none font-mono transition">
+                    <p class="text-[9px] text-zinc-500 leading-normal">
+                        Key is saved only locally in your browser state (<code class="text-zinc-400">localStorage</code>).
+                    </p>
+                </div>
+
+                <!-- Model Selector -->
+                <div class="p-5 border-b border-zinc-900">
+                    <label class="block font-mono text-[10px] uppercase tracking-wider text-zinc-500 mb-3">Intelligence Model</label>
+                    <div class="space-y-2" id="modelSelector">
+                        <button onclick="selectModel('llama-3.3-70b-versatile')" id="btn-llama-3.3"
+                            class="w-full text-left p-3 rounded-xl border transition-all duration-150 bg-zinc-900 border-zinc-700">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-xs font-semibold text-white">Llama 3.3 70B</span>
+                                <span class="font-mono text-[8px] px-1.5 py-0.5 rounded-full bg-black text-zinc-500 border border-zinc-800">Meta</span>
+                            </div>
+                            <p class="text-[10px] text-zinc-500 leading-normal">Flagship model for high quality complex technical reasoning.</p>
+                        </button>
+                        <button onclick="selectModel('llama-3.1-8b-instant')" id="btn-llama-3.1"
+                            class="w-full text-left p-3 rounded-xl border transition-all duration-150 border-zinc-900 hover:border-zinc-800 hover:bg-zinc-900/40">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-xs font-semibold text-zinc-300">Llama 3.1 8B</span>
+                                <span class="font-mono text-[8px] px-1.5 py-0.5 rounded-full bg-black text-zinc-500 border border-zinc-800">Meta</span>
+                            </div>
+                            <p class="text-[10px] text-zinc-500 leading-normal">Ultralight, lightning-fast instant completions.</p>
+                        </button>
                     </div>
                 </div>
-            </div>
 
-            <!-- Model Selector -->
-            <div class="p-5 border-b border-zinc-900">
-                <label class="block font-mono text-[10px] uppercase text-zinc-500 mb-3">Intelligence Model</label>
-                <div class="space-y-2" id="modelSelector">
-                    <button onclick="selectModel('llama-3.3-70b-versatile')" id="btn-llama-3.3" 
-                        class="w-full text-left p-3 rounded-lg border transition-all duration-150 bg-zinc-900 border-zinc-700">
-                        <div class="flex items-center justify-between mb-1">
-                            <span class="text-xs font-semibold text-white">Llama 3.3 70B</span>
-                            <span class="font-mono text-[8px] px-1 py-0.2 rounded bg-black text-zinc-500 border border-zinc-800">Meta</span>
-                        </div>
-                        <p class="text-[10px] text-zinc-500 leading-normal">Flagship model for high quality complex technical reasoning.</p>
+                <!-- Temperature Slider -->
+                <div class="p-5 border-b border-zinc-900">
+                    <div class="flex items-center justify-between mb-2 font-mono text-[10px] uppercase tracking-wider text-zinc-500">
+                        <span>Temperature</span>
+                        <span id="tempDisplay" class="text-zinc-200 font-bold bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded">0.7</span>
+                    </div>
+                    <input type="range" min="0" max="1.5" step="0.1" value="0.7" oninput="updateTemp(this.value)"
+                        class="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-zinc-300 focus:outline-none">
+                    <div class="flex justify-between text-[9px] font-mono text-zinc-600 mt-1">
+                        <span>Precise</span>
+                        <span>Creative</span>
+                    </div>
+                </div>
+
+                <!-- Studio Bridge Connect (sidebar copy) -->
+                <div class="p-5 border-b border-zinc-900 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <label class="block font-mono text-[10px] uppercase tracking-wider text-zinc-500">Roblox Studio Bridge</label>
+                        <button onclick="toggleMcpModal('roblox')" class="text-[9px] font-mono text-zinc-500 hover:text-zinc-300 transition">Full setup →</button>
+                    </div>
+                    <div id="bridgeStatus-sidebar" class="text-[11px] font-mono text-rose-400 flex items-center gap-1.5">
+                        <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Not connected
+                    </div>
+                    <input type="text" id="bridgeCodeInput-sidebar" placeholder="Pairing code (e.g. 7K4P-XQ2M)"
+                        class="w-full p-2.5 bg-zinc-900/70 border border-zinc-800 rounded-lg text-xs text-zinc-200 placeholder-zinc-600 focus:border-zinc-500 focus:outline-none font-mono transition">
+                    <button onclick="connectStudioBridge('sidebar')"
+                        class="w-full p-2 bg-zinc-100 text-black font-semibold text-xs rounded-lg hover:bg-white transition cursor-pointer">
+                        Connect
                     </button>
-                    <button onclick="selectModel('llama-3.1-8b-instant')" id="btn-llama-3.1" 
-                        class="w-full text-left p-3 rounded-lg border transition-all duration-150 border-zinc-900 hover:border-zinc-800">
-                        <div class="flex items-center justify-between mb-1">
-                            <span class="text-xs font-semibold text-zinc-300">Llama 3.1 8B</span>
-                            <span class="font-mono text-[8px] px-1 py-0.2 rounded bg-black text-zinc-500 border border-zinc-800">Meta</span>
-                        </div>
-                        <p class="text-[10px] text-zinc-500 leading-normal">Ultralight, lightning-fast instant completions.</p>
-                    </button>
+                    <p class="text-[9px] text-zinc-600 leading-normal">
+                        Core can build <span class="text-zinc-400">folders, scripts &amp; UI</span> in Studio — never parts or 3D geometry.
+                    </p>
                 </div>
-            </div>
 
-            <!-- Temperature Slider -->
-            <div class="p-5 border-b border-zinc-900">
-                <div class="flex items-center justify-between mb-2 font-mono text-[10px] uppercase text-zinc-500">
-                    <span>Temperature</span>
-                    <span id="tempDisplay" class="text-zinc-200 font-bold">0.7</span>
-                </div>
-                <input type="range" min="0" max="1.5" step="0.1" value="0.7" oninput="updateTemp(this.value)"
-                    class="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-zinc-400 focus:outline-none">
-                <div class="flex justify-between text-[9px] font-mono text-zinc-600 mt-1">
-                    <span>Precise</span>
-                    <span>Creative</span>
-                </div>
-            </div>
-
-            <!-- Studio Bridge Connect -->
-            <div class="p-5 border-b border-zinc-900 space-y-2.5">
-                <label class="block font-mono text-[10px] uppercase text-zinc-500 mb-1">Roblox Studio Bridge</label>
-                <div id="bridgeStatus" class="text-[11px] font-mono text-rose-400 flex items-center gap-1.5">
-                    <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Not connected
-                </div>
-                <input type="text" id="bridgeCodeInput" placeholder="Enter code from Studio plugin (e.g. 7K4P-XQ2M)"
-                    class="w-full p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-200 placeholder-zinc-600 focus:border-zinc-600 focus:outline-none font-mono">
-                <button onclick="connectStudioBridge()"
-                    class="w-full p-2 bg-zinc-100 text-black font-semibold text-xs rounded-lg hover:bg-white transition cursor-pointer">
-                    Connect
-                </button>
-                <p class="text-[9px] text-zinc-500 leading-normal">Open the Core AI plugin in Studio, copy the pairing code it shows, and paste it here.</p>
             </div>
 
             <!-- Clear Action -->
-            <div class="p-5 mt-auto">
-                <button onclick="clearConversation()" 
-                    class="w-full flex items-center justify-center gap-2 p-2.5 rounded-lg border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900/50 hover:border-zinc-700 transition duration-150 cursor-pointer text-xs font-semibold">
+            <div class="p-5 shrink-0">
+                <button onclick="clearConversation()"
+                    class="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900/50 hover:border-zinc-700 transition duration-150 cursor-pointer text-xs font-semibold">
                     <i data-lucide="trash-2" class="w-4 h-4"></i>
                     Clear Conversation
                 </button>
@@ -156,15 +155,14 @@
 
         <!-- === CHAT AREA === -->
         <main class="flex-1 flex flex-col h-full bg-zinc-950 overflow-hidden relative">
-            
-            <!-- Standalone Header Bar -->
-            <header class="h-14 border-b border-zinc-900 bg-neutral-950 px-4 flex items-center justify-between select-none">
+
+            <header class="h-14 border-b border-zinc-900 bg-neutral-950 px-4 flex items-center justify-between select-none shrink-0">
                 <div class="flex items-center gap-3">
                     <button onclick="toggleSidebar()" class="lg:hidden p-1.5 text-zinc-400 hover:text-white bg-zinc-900 rounded-lg">
                         <i data-lucide="menu" class="w-5 h-5"></i>
                     </button>
                     <div class="flex items-center gap-2">
-                        <div class="w-6 h-6 rounded bg-zinc-800 flex items-center justify-center border border-zinc-700">
+                        <div class="w-6 h-6 rounded bg-gradient-to-br from-zinc-700 to-zinc-900 flex items-center justify-center border border-zinc-700">
                             <span class="font-mono text-[10px] text-white font-bold">C</span>
                         </div>
                         <h1 class="font-sans text-xs md:text-sm font-semibold tracking-wide text-zinc-100">CORE STANDALONE</h1>
@@ -172,7 +170,10 @@
                 </div>
 
                 <div class="flex items-center gap-2">
-                    <button onclick="toggleMcpModal()" 
+                    <div id="headerBridgeChip" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-rose-400">
+                        <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Studio disconnected
+                    </div>
+                    <button onclick="toggleMcpModal()"
                         class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 text-zinc-300 hover:text-white border border-zinc-800 hover:border-zinc-700 text-xs font-semibold transition cursor-pointer">
                         <i data-lucide="layers" class="w-3.5 h-3.5"></i>
                         <span>MCP & Roblox Setup</span>
@@ -180,47 +181,46 @@
                 </div>
             </header>
 
-            <!-- Scrollable Messages Container -->
             <div id="chatScrollArea" class="flex-1 overflow-y-auto px-4 py-6 md:px-8 space-y-6">
-                
-                <!-- Empty State Layout -->
+
                 <div id="emptyState" class="max-w-2xl mx-auto h-full flex flex-col justify-center items-center py-12 text-center">
-                    
-                    <!-- Core Visualizer -->
+
                     <div class="relative w-32 h-32 flex items-center justify-center mb-6">
-                        <!-- Orbit Ring -->
                         <div class="absolute inset-0 rounded-full border border-zinc-800 animate-[spin_20s_linear_infinite]"></div>
                         <div class="absolute inset-2 rounded-full border border-dashed border-zinc-700/60 animate-[spin_12s_linear_infinite_reverse]"></div>
-                        <!-- Core Sphere -->
                         <div class="w-16 h-16 rounded-full bg-gradient-to-b from-zinc-700 via-zinc-800 to-black shadow-2xl flex items-center justify-center border border-zinc-600/50 animate-pulse">
                             <div class="w-4 h-4 rounded-full bg-zinc-300 shadow-[0_0_15px_rgba(255,255,255,0.4)]"></div>
                         </div>
                     </div>
 
-                    <h2 class="text-xl md:text-2xl font-bold tracking-tight text-white">Core Neural Assistant</h2>
+                    <h2 class="text-2xl md:text-3xl font-extrabold tracking-tight core-gradient-text">Core Neural Assistant</h2>
                     <p class="text-xs md:text-sm text-zinc-400 mt-2 max-w-md mx-auto leading-relaxed">
-                        Standalone edition. Input your Groq API Key in the sidebar or connect with Roblox Studio bridges directly in the setup modal.
+                        Standalone edition. Add your Groq API key in the sidebar, or connect Roblox Studio to have Core
+                        scaffold folders, scripts, and UI directly in your place.
                     </p>
 
-                    <!-- Starters -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 mt-8 w-full text-left">
-                        <button onclick="useQuickPrompt('Give me 3 practical principles for crafting high-end black and grey minimalist interfaces.')" 
-                            class="p-4 rounded-xl bg-zinc-900/40 border border-zinc-900 hover:bg-zinc-900 hover:border-zinc-800 text-left transition duration-200 cursor-pointer">
-                            <span class="text-xs font-semibold text-zinc-200 block mb-1">Minimalist Design</span>
+                        <button onclick="useQuickPrompt('Give me 3 practical principles for crafting high-end black and grey minimalist interfaces.')"
+                            class="group p-4 rounded-2xl bg-zinc-900/40 border border-zinc-900 hover:bg-zinc-900 hover:border-zinc-700 text-left transition duration-200 cursor-pointer">
+                            <div class="flex items-center gap-2 mb-1.5">
+                                <i data-lucide="palette" class="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300 transition"></i>
+                                <span class="text-xs font-semibold text-zinc-200">Minimalist Design</span>
+                            </div>
                             <p class="text-[11px] text-zinc-500 leading-normal">Draft high-end black and grey interface guidelines.</p>
                         </button>
-                        <button onclick="useQuickPrompt('Generate a Luau script to create a rotating neon part in Roblox Studio.')"
-                            class="p-4 rounded-xl bg-zinc-900/40 border border-zinc-900 hover:bg-zinc-900 hover:border-zinc-800 text-left transition duration-200 cursor-pointer">
-                            <span class="text-xs font-semibold text-zinc-200 block mb-1">Roblox Luau Generation</span>
-                            <p class="text-[11px] text-zinc-500 leading-normal">Generate rotating parts or advanced mechanics code.</p>
+                        <button onclick="useQuickPrompt('Create a StarterGui screen with a title label and a Play button.')"
+                            class="group p-4 rounded-2xl bg-zinc-900/40 border border-zinc-900 hover:bg-zinc-900 hover:border-zinc-700 text-left transition duration-200 cursor-pointer">
+                            <div class="flex items-center gap-2 mb-1.5">
+                                <i data-lucide="layout-panel-top" class="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300 transition"></i>
+                                <span class="text-xs font-semibold text-zinc-200">Build a Menu UI</span>
+                            </div>
+                            <p class="text-[11px] text-zinc-500 leading-normal">Have Core scaffold a ScreenGui straight into Studio.</p>
                         </button>
                     </div>
                 </div>
 
-                <!-- Active Messages List -->
                 <div id="messagesList" class="max-w-3xl mx-auto space-y-6 hidden"></div>
 
-                <!-- Loading Bubble -->
                 <div id="thinkingBubble" class="max-w-3xl mx-auto space-y-6 hidden">
                     <div class="flex gap-4 justify-start">
                         <div class="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0 animate-pulse">
@@ -228,9 +228,7 @@
                         </div>
                         <div class="flex flex-col items-start max-w-[85%]">
                             <div class="flex items-center gap-2 mb-1 px-1 font-mono text-[10px] text-zinc-500">
-                                <span>Core</span>
-                                <span>•</span>
-                                <span class="animate-pulse">Computing...</span>
+                                <span>Core</span><span>•</span><span class="animate-pulse">Computing...</span>
                             </div>
                             <div class="rounded-2xl px-4 py-3 bg-neutral-900 border border-zinc-900 shadow-lg text-zinc-400 text-xs">
                                 Synthesizing response using active model...
@@ -241,9 +239,7 @@
 
             </div>
 
-            <!-- Input area form container -->
-            <div class="p-4 md:p-6 bg-neutral-950/80 backdrop-blur border-t border-zinc-900 relative">
-                <!-- Floating Listening Bar -->
+            <div class="p-4 md:p-6 bg-neutral-950/80 backdrop-blur border-t border-zinc-900 relative shrink-0">
                 <div id="listeningOverlay" class="absolute -top-12 left-4 right-4 md:left-6 md:right-6 max-w-3xl mx-auto bg-red-950/85 border border-red-900/60 text-red-200 px-4 py-2.5 rounded-xl flex items-center justify-between shadow-lg backdrop-blur z-30 hidden">
                     <div class="flex items-center gap-2">
                         <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shrink-0"></span>
@@ -260,15 +256,13 @@
                 <form id="chatForm" onsubmit="handleFormSubmit(event)" class="max-w-3xl mx-auto relative flex gap-2">
                     <input type="text" id="userInput" required placeholder="Type your message to Core..."
                         class="flex-1 p-3.5 bg-neutral-900 border border-zinc-800/80 text-sm text-zinc-200 placeholder-zinc-600 rounded-xl focus:border-zinc-500 focus:outline-none transition leading-normal shadow-inner">
-                    
-                    <!-- Quick MCP Button in Footer Form -->
+
                     <button type="button" onclick="toggleMcpModal()"
                         class="p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 transition duration-150 flex items-center justify-center h-12 w-12"
                         title="Open MCP & Setup Panel">
                         <i data-lucide="plus" class="w-4 h-4"></i>
                     </button>
 
-                    <!-- Microphone Button -->
                     <button type="button" id="micBtn" onclick="toggleStandaloneListening()"
                         class="p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 transition duration-150 flex items-center justify-center h-12 w-12"
                         title="Use Voice Input">
@@ -288,56 +282,83 @@
 
     <!-- === INSTRUCTIONS & MCP MODAL OVERLAY === -->
     <div id="mcpModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 md:p-8 hidden">
-        <div class="w-full max-w-4xl h-[85vh] bg-neutral-950 border border-zinc-900 rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.9)] flex flex-col relative">
-            
-            <!-- Modal Header -->
-            <div class="p-5 border-b border-zinc-900 bg-neutral-950 flex items-center justify-between">
+        <div class="w-full max-w-4xl h-[85vh] bg-neutral-950 border border-zinc-900 rounded-2xl overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.9)] flex flex-col relative core-glow">
+
+            <div class="p-5 border-b border-zinc-900 bg-neutral-950 flex items-center justify-between shrink-0">
                 <div class="flex items-center gap-2.5">
-                    <i data-lucide="layers" class="w-5 h-5 text-zinc-400"></i>
+                    <div class="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+                        <i data-lucide="layers" class="w-4 h-4 text-zinc-400"></i>
+                    </div>
                     <div>
                         <h2 class="font-sans text-sm font-semibold tracking-wide text-zinc-100">MCP & ROBLOX SETUP</h2>
                         <p class="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Standalone Integration Interface</p>
                     </div>
                 </div>
-                <button onclick="toggleMcpModal()" class="p-1.5 hover:bg-zinc-900 rounded border border-zinc-800 text-zinc-400 hover:text-rose-400 transition cursor-pointer">
+                <button onclick="toggleMcpModal()" class="p-1.5 hover:bg-zinc-900 rounded-lg border border-zinc-800 text-zinc-400 hover:text-rose-400 transition cursor-pointer">
                     <i data-lucide="x" class="w-4 h-4"></i>
                 </button>
             </div>
 
-            <!-- Tabs selectors -->
-            <div class="flex border-b border-zinc-900 bg-neutral-950/40 text-xs">
-                <button onclick="switchMcpTab('roblox')" id="tab-roblox" class="flex-1 py-3 text-center font-mono uppercase tracking-wider border-b-2 border-zinc-100 text-white bg-zinc-900/30 font-semibold">
+            <div class="flex border-b border-zinc-900 bg-neutral-950/40 text-xs shrink-0">
+                <button onclick="switchMcpTab('roblox')" id="tab-roblox" class="flex-1 py-3 text-center font-mono uppercase tracking-wider border-b-2 border-zinc-100 text-white bg-zinc-900/30 font-semibold transition">
                     Roblox Studio
                 </button>
-                <button onclick="switchMcpTab('mcp')" id="tab-mcp" class="flex-1 py-3 text-center font-mono uppercase tracking-wider border-b-2 border-transparent text-zinc-500 hover:text-zinc-300">
+                <button onclick="switchMcpTab('mcp')" id="tab-mcp" class="flex-1 py-3 text-center font-mono uppercase tracking-wider border-b-2 border-transparent text-zinc-500 hover:text-zinc-300 transition">
                     Model Context Protocol
                 </button>
             </div>
 
-            <!-- Panel Content Area -->
             <div class="flex-1 overflow-y-auto p-6 space-y-6">
-                
+
                 <!-- ROBLOX PANEL -->
                 <div id="panel-roblox" class="space-y-6">
+
+                    <!-- Connect Section (lives here too, synced with sidebar) -->
+                    <div class="p-5 rounded-2xl bg-gradient-to-b from-zinc-900/60 to-zinc-950/60 border border-zinc-800 space-y-3.5">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="plug-zap" class="w-4 h-4 text-zinc-400"></i>
+                                <span class="text-xs font-semibold tracking-wide text-zinc-200">Connect to Studio</span>
+                            </div>
+                            <div id="bridgeStatus-modal" class="text-[11px] font-mono text-rose-400 flex items-center gap-1.5">
+                                <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Not connected
+                            </div>
+                        </div>
+                        <div class="flex flex-col sm:flex-row gap-2.5">
+                            <input type="text" id="bridgeCodeInput-modal" placeholder="Enter code from Studio plugin (e.g. 7K4P-XQ2M)"
+                                class="flex-1 p-3 bg-zinc-900/80 border border-zinc-800 rounded-xl text-xs text-zinc-200 placeholder-zinc-600 focus:border-zinc-500 focus:outline-none font-mono transition">
+                            <button onclick="connectStudioBridge('modal')"
+                                class="px-5 py-3 bg-zinc-100 text-black font-semibold text-xs rounded-xl hover:bg-white transition cursor-pointer whitespace-nowrap">
+                                Connect
+                            </button>
+                        </div>
+                        <p class="text-[10px] text-zinc-500 leading-normal">
+                            Open the Core AI plugin in Studio, copy the pairing code shown in the dock widget, and paste it above.
+                        </p>
+                    </div>
+
                     <div class="p-4 bg-zinc-900/20 border border-zinc-900 rounded-xl space-y-2.5">
                         <div class="flex items-center gap-2 text-zinc-300">
                             <i data-lucide="info" class="w-4 h-4 text-zinc-500"></i>
-                            <span class="text-xs font-semibold tracking-wide">Connecting Standalone to Roblox Studio</span>
+                            <span class="text-xs font-semibold tracking-wide">How it works</span>
                         </div>
                         <ol class="list-decimal list-inside text-[11px] text-zinc-400 space-y-1.5 leading-relaxed">
                             <li>Install the <strong class="text-zinc-200">Core AI</strong> Studio plugin (see <code class="text-zinc-300">roblox_plugin/CoreAI_Plugin.server.lua</code>).</li>
                             <li>Run the bridge server (<code class="text-zinc-300">server/server.js</code>) and point both the plugin and this page at it.</li>
                             <li>Open the plugin's panel in Studio — it shows a pairing code like <code class="text-zinc-300">7K4P-XQ2M</code>.</li>
-                            <li>Paste that code into the <strong class="text-zinc-200">Roblox Studio Bridge</strong> box in the sidebar and click Connect.</li>
-                            <li>Ask Core to make a change ("create a red part") — it'll show up in your Studio workspace live.</li>
+                            <li>Paste that code above and click Connect.</li>
+                            <li>Ask Core to build something ("make a settings menu UI", "add a leaderboard module script") — it'll show up live in Studio.</li>
                         </ol>
                     </div>
 
-                    <!-- Code Box -->
                     <div class="space-y-2">
-                        <span class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider block">Plugin Source</span>
-                        <div class="rounded-lg border border-zinc-800 bg-neutral-950 font-mono text-[10px] text-zinc-500 p-4 leading-relaxed">
-                            The full plugin lives in <span class="text-zinc-300">roblox_plugin/CoreAI_Plugin.server.lua</span> in the project bundle — it creates the pairing session, shows the dock widget UI, polls the bridge server, and runs a whitelisted set of safe actions (create_part, set_color, set_size, set_position, delete_part, delete_all). It never executes arbitrary code sent from the web.
+                        <span class="font-mono text-[9px] text-zinc-500 uppercase tracking-wider block">What Core Can Build</span>
+                        <div class="rounded-xl border border-zinc-800 bg-neutral-950 font-mono text-[10px] text-zinc-500 p-4 leading-relaxed space-y-2">
+                            <div><span class="text-emerald-400">✓ create_folder</span> — organize ReplicatedStorage / ServerScriptService / StarterGui / StarterPlayerScripts</div>
+                            <div><span class="text-emerald-400">✓ create_script</span> — Script, LocalScript, or ModuleScript, with generated source</div>
+                            <div><span class="text-emerald-400">✓ create_ui</span> — ScreenGui, Frame, TextLabel, TextButton, and other whitelisted GUI classes</div>
+                            <div><span class="text-emerald-400">✓ delete_instance</span> — remove something Core (or you) created earlier</div>
+                            <div class="pt-1 border-t border-zinc-900"><span class="text-rose-400">✗ no parts, meshes, unions, or any 3D geometry</span> — that whitelist is intentionally absent from the plugin.</div>
                         </div>
                     </div>
                 </div>
@@ -354,18 +375,18 @@
                         </p>
                     </div>
 
-                    <div class="p-4 bg-zinc-950/40 border border-zinc-850 rounded-xl space-y-4">
+                    <div class="p-5 rounded-2xl bg-gradient-to-b from-zinc-900/60 to-zinc-950/60 border border-zinc-800 space-y-4">
                         <span class="text-xs font-semibold text-zinc-200 block">Register Standalone MCP Node</span>
                         <div class="space-y-3">
                             <div>
                                 <label class="font-mono text-[9px] uppercase text-zinc-500 block mb-1">Server Name</label>
-                                <input type="text" id="mcpName" placeholder="Local Explorer" class="w-full p-2 bg-neutral-900 border border-zinc-800 rounded text-xs text-zinc-200 focus:outline-none">
+                                <input type="text" id="mcpName" placeholder="Local Explorer" class="w-full p-2.5 bg-zinc-900/80 border border-zinc-800 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-zinc-500 transition">
                             </div>
                             <div>
                                 <label class="font-mono text-[9px] uppercase text-zinc-500 block mb-1">Server Endpoint URL</label>
-                                <input type="url" id="mcpUrl" placeholder="http://localhost:3005/mcp" class="w-full p-2 bg-neutral-900 border border-zinc-800 rounded text-xs text-zinc-200 focus:outline-none font-mono">
+                                <input type="url" id="mcpUrl" placeholder="http://localhost:3005/mcp" class="w-full p-2.5 bg-zinc-900/80 border border-zinc-800 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-zinc-500 font-mono transition">
                             </div>
-                            <button onclick="registerMcpNode()" class="w-full p-2 bg-zinc-100 text-black font-semibold text-xs rounded hover:bg-white transition cursor-pointer">
+                            <button onclick="registerMcpNode()" class="w-full p-2.5 bg-zinc-100 text-black font-semibold text-xs rounded-lg hover:bg-white transition cursor-pointer">
                                 Add Server Node
                             </button>
                         </div>
@@ -379,7 +400,6 @@
 
     <!-- === SCRIPT SYSTEM LOGIC === -->
     <script>
-        // State variables
         let activeModel = "llama-3.3-70b-versatile";
         let activeTemperature = 0.7;
         let messages = [];
@@ -388,8 +408,9 @@
         const BRIDGE_URL = "https://core-bridge-server.onrender.com"; // change to your deployed bridge server
         let bridgeCode = localStorage.getItem("coreBridgeCode") || null;
 
-        async function connectStudioBridge() {
-            const input = document.getElementById('bridgeCodeInput');
+        async function connectStudioBridge(origin) {
+            const inputId = origin === 'modal' ? 'bridgeCodeInput-modal' : 'bridgeCodeInput-sidebar';
+            const input = document.getElementById(inputId);
             const code = input.value.trim().toUpperCase();
             if (!code) return;
             try {
@@ -411,16 +432,28 @@
         }
 
         function setBridgeStatus(connected) {
-            const el = document.getElementById('bridgeStatus');
-            el.innerHTML = connected
-                ? `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Connected to Studio`
-                : `<span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Not connected`;
-            el.className = connected
+            const dotClass = connected ? "bg-emerald-500" : "bg-rose-500";
+            const textClass = connected
                 ? "text-[11px] font-mono text-emerald-400 flex items-center gap-1.5"
                 : "text-[11px] font-mono text-rose-400 flex items-center gap-1.5";
+            const label = connected ? "Connected to Studio" : "Not connected";
+
+            ['bridgeStatus-sidebar', 'bridgeStatus-modal'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${dotClass}"></span> ${label}`;
+                el.className = textClass;
+            });
+
+            const chip = document.getElementById('headerBridgeChip');
+            if (chip) {
+                chip.className = connected
+                    ? "hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-emerald-400"
+                    : "hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-rose-400";
+                chip.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${dotClass}"></span> ${connected ? "Studio connected" : "Studio disconnected"}`;
+            }
         }
 
-        // Sends one whitelisted action to the plugin's command queue.
         async function sendStudioCommand(command) {
             if (!bridgeCode) return { ok: false, reason: "not_connected" };
             try {
@@ -435,7 +468,6 @@
             }
         }
 
-        // Pulls a ```core-action { ... } ``` JSON block out of the AI's reply, if present.
         function extractStudioAction(text) {
             const match = text.match(/```core-action\s*([\s\S]*?)```/i);
             if (!match) return null;
@@ -455,9 +487,12 @@
             sidebar.classList.toggle('flex');
         }
 
-        function toggleMcpModal() {
+        function toggleMcpModal(focusTab) {
             const modal = document.getElementById('mcpModal');
             modal.classList.toggle('hidden');
+            if (focusTab && !modal.classList.contains('hidden')) {
+                switchMcpTab(focusTab);
+            }
         }
 
         function switchMcpTab(tabName) {
@@ -466,14 +501,17 @@
             const rPanel = document.getElementById('panel-roblox');
             const mPanel = document.getElementById('panel-mcp');
 
+            const activeClass = "flex-1 py-3 text-center font-mono uppercase tracking-wider border-b-2 border-zinc-100 text-white bg-zinc-900/30 font-semibold transition";
+            const inactiveClass = "flex-1 py-3 text-center font-mono uppercase tracking-wider border-b-2 border-transparent text-zinc-500 hover:text-zinc-300 transition";
+
             if (tabName === 'roblox') {
-                rTab.className = "flex-1 py-3 text-center font-mono uppercase tracking-wider border-b-2 border-zinc-100 text-white bg-zinc-900/30 font-semibold";
-                mTab.className = "flex-1 py-3 text-center font-mono uppercase tracking-wider border-b-2 border-transparent text-zinc-500 hover:text-zinc-300";
+                rTab.className = activeClass;
+                mTab.className = inactiveClass;
                 rPanel.classList.remove('hidden');
                 mPanel.classList.add('hidden');
             } else {
-                mTab.className = "flex-1 py-3 text-center font-mono uppercase tracking-wider border-b-2 border-zinc-100 text-white bg-zinc-900/30 font-semibold";
-                rTab.className = "flex-1 py-3 text-center font-mono uppercase tracking-wider border-b-2 border-transparent text-zinc-500 hover:text-zinc-300";
+                mTab.className = activeClass;
+                rTab.className = inactiveClass;
                 mPanel.classList.remove('hidden');
                 rPanel.classList.add('hidden');
             }
@@ -481,26 +519,18 @@
 
         function selectModel(modelId) {
             activeModel = modelId;
-            document.getElementById('btn-llama-3.3').className = modelId === 'llama-3.3-70b-versatile' 
-                ? "w-full text-left p-3 rounded-lg border transition-all duration-150 bg-zinc-900 border-zinc-700" 
-                : "w-full text-left p-3 rounded-lg border transition-all duration-150 border-zinc-900 hover:border-zinc-800";
-            
-            document.getElementById('btn-llama-3.1').className = modelId === 'llama-3.1-8b-instant' 
-                ? "w-full text-left p-3 rounded-lg border transition-all duration-150 bg-zinc-900 border-zinc-700" 
-                : "w-full text-left p-3 rounded-lg border transition-all duration-150 border-zinc-900 hover:border-zinc-800";
+            document.getElementById('btn-llama-3.3').className = modelId === 'llama-3.3-70b-versatile'
+                ? "w-full text-left p-3 rounded-xl border transition-all duration-150 bg-zinc-900 border-zinc-700"
+                : "w-full text-left p-3 rounded-xl border transition-all duration-150 border-zinc-900 hover:border-zinc-800 hover:bg-zinc-900/40";
+
+            document.getElementById('btn-llama-3.1').className = modelId === 'llama-3.1-8b-instant'
+                ? "w-full text-left p-3 rounded-xl border transition-all duration-150 bg-zinc-900 border-zinc-700"
+                : "w-full text-left p-3 rounded-xl border transition-all duration-150 border-zinc-900 hover:border-zinc-800 hover:bg-zinc-900/40";
         }
 
         function updateTemp(val) {
             activeTemperature = parseFloat(val);
             document.getElementById('tempDisplay').textContent = val;
-        }
-
-        function copyLuauScript() {
-            const code = document.getElementById('luauCodeSource').innerText;
-            navigator.clipboard.writeText(code);
-            const btn = document.getElementById('copyBtnText');
-            btn.textContent = "Copied!";
-            setTimeout(() => btn.textContent = "Copy Code", 2000);
         }
 
         function useQuickPrompt(text) {
@@ -515,7 +545,6 @@
             }
         }
 
-        // Handle send flow
         function handleFormSubmit(e) {
             e.preventDefault();
             const input = document.getElementById('userInput');
@@ -527,65 +556,64 @@
 
         async function handleSendMessage(text) {
             stopStandaloneListening();
-            // Push user message
             const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            messages.push({
-                role: "user",
-                content: text,
-                timestamp: timestamp
-            });
+            messages.push({ role: "user", content: text, timestamp: timestamp });
 
             renderMessages();
-            
+
             const thinkingBubble = document.getElementById('thinkingBubble');
             thinkingBubble.classList.remove('hidden');
 
             const apiKey = document.getElementById('apiKeyInput').value.trim();
 
             if (!apiKey) {
-                // Return mock intelligence response when key is empty
                 setTimeout(() => {
                     thinkingBubble.classList.add('hidden');
                     let reply = "";
-                    if (text.toLowerCase().includes("red part") || text.toLowerCase().includes("studio")) {
+                    const lower = text.toLowerCase();
+                    if (lower.includes("ui") || lower.includes("menu") || lower.includes("screen") || lower.includes("button")) {
                         if (bridgeCode) {
-                            sendStudioCommand({ action: "create_part", name: "CoreAIPart", color: "Really red", posX: 0, posY: 10, posZ: 0 });
-                            reply = "Done — I sent a `create_part` command to your connected Studio session. You should see a red part appear in the workspace within a couple seconds.";
+                            sendStudioCommand({ action: "create_ui", className: "ScreenGui", name: "CoreAIMenu", root: "StarterGui" });
+                            reply = "Done — I sent a `create_ui` command to your connected Studio session. A new ScreenGui named **CoreAIMenu** should appear under StarterGui.";
                         } else {
-                            reply = "I'd create that part, but Studio isn't connected yet. Open the Core AI plugin in Studio, grab the pairing code it shows, and paste it into the **Roblox Studio Bridge** box in the sidebar.";
+                            reply = "I'd scaffold that UI, but Studio isn't connected yet. Open the Connect section in MCP & Roblox Setup, grab the pairing code from the plugin, and connect.";
+                        }
+                    } else if (lower.includes("script") || lower.includes("module")) {
+                        if (bridgeCode) {
+                            sendStudioCommand({
+                                action: "create_script", scriptType: "ModuleScript", name: "CoreAIModule",
+                                root: "ReplicatedStorage", source: "local Module = {}\n\nreturn Module\n"
+                            });
+                            reply = "Done — I sent a `create_script` command to your connected Studio session. A new ModuleScript named **CoreAIModule** should appear in ReplicatedStorage.";
+                        } else {
+                            reply = "I'd create that script, but Studio isn't connected yet. Open the Connect section in MCP & Roblox Setup, grab the pairing code from the plugin, and connect.";
                         }
                     } else {
                         reply = "Hello! I am Core. I am operating in Standalone offline simulation mode because you haven't supplied a `GROQ_API_KEY` in the sidebar yet.\n\n" +
-                                "Please paste your key to communicate directly with my high-speed open-source Llama 3.3 models. Alternatively, you can test Roblox Studio instructions inside the setup modal above!";
+                                "Please paste your key to communicate directly with my high-speed open-source Llama 3.3 models. Alternatively, ask me to scaffold a folder, script, or UI in Studio!";
                     }
-                    messages.push({
-                        role: "assistant",
-                        content: reply,
-                        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                    });
+                    messages.push({ role: "assistant", content: reply, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
                     renderMessages();
                 }, 1000);
                 return;
             }
 
-            // Real fetch API completion to Groq endpoint
             try {
                 const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
                     method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${apiKey}`
-                    },
+                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
                     body: JSON.stringify({
                         model: activeModel,
                         messages: [
                             { role: "system", content: "You are Core, an advanced, highly intelligent AI. Adopt a sophisticated, polite tone. " +
-                                "You can control a connected Roblox Studio session, but ONLY through this exact mechanism: " +
-                                "when the user asks you to create, color, move, resize, or delete something in the workspace, " +
-                                "include ONE fenced block in your reply formatted exactly like this:\n" +
-                                "```core-action\n{\"action\":\"create_part\",\"name\":\"CoreAIPart\",\"color\":\"Really red\",\"sizeX\":4,\"sizeY\":1,\"sizeZ\":4,\"posX\":0,\"posY\":10,\"posZ\":0}\n```\n" +
-                                "Valid action values are: create_part, set_color, set_size, set_position, delete_part, delete_all. " +
-                                "Roblox color names must be valid BrickColor names (e.g. \"Really red\", \"Bright blue\", \"Lime green\"). " +
+                                "You can control a connected Roblox Studio session, but ONLY through this exact mechanism, and ONLY with this " +
+                                "fixed vocabulary of actions — you can build structure, code, and UI, but you can NEVER create parts, meshes, " +
+                                "unions, or any 3D geometry (there is no action for that, and the plugin will refuse anything outside this list):\n\n" +
+                                "1. create_folder — { \"action\":\"create_folder\", \"root\":\"ReplicatedStorage|ServerScriptService|StarterGui|StarterPlayerScripts\", \"path\":\"optional.dotted.path\", \"name\":\"FolderName\" }\n" +
+                                "2. create_script — { \"action\":\"create_script\", \"root\":\"...\", \"path\":\"optional\", \"name\":\"ScriptName\", \"scriptType\":\"Script|LocalScript|ModuleScript\", \"source\":\"-- luau code\" }\n" +
+                                "3. create_ui — { \"action\":\"create_ui\", \"root\":\"...\", \"path\":\"optional\", \"name\":\"InstanceName\", \"className\":\"ScreenGui|Frame|ScrollingFrame|TextLabel|TextButton|TextBox|ImageLabel|ImageButton|UIListLayout|UIGridLayout|UIPadding|UICorner|UIStroke|UIAspectRatioConstraint|Folder\", \"properties\": { ...whitelisted properties like Text, Size, Position, BackgroundColor3 } }\n" +
+                                "4. delete_instance — { \"action\":\"delete_instance\", \"root\":\"...\", \"path\":\"optional\", \"name\":\"InstanceName\" }\n\n" +
+                                "Include AT MOST ONE fenced ```core-action block per reply, containing a single JSON object. " +
                                 "Only emit this block when the user actually wants a Studio change — never for normal conversation. " +
                                 "Write a short natural-language sentence around the block explaining what you did." },
                             ...messages.map(m => ({ role: m.role, content: m.content }))
@@ -604,36 +632,25 @@
                     if (action) {
                         if (bridgeCode) {
                             const result = await sendStudioCommand(action);
-                            reply += result.ok
-                                ? "\n\n✅ Sent to your connected Studio session."
-                                : "\n\n⚠️ Couldn't reach Studio — is the plugin running and connected?";
+                            reply += result.ok ? "\n\n✅ Sent to your connected Studio session." : "\n\n⚠️ Couldn't reach Studio — is the plugin running and connected?";
                         } else {
-                            reply += "\n\n⚠️ Studio isn't connected. Paste the pairing code from the Core AI plugin into the sidebar first.";
+                            reply += "\n\n⚠️ Studio isn't connected. Open MCP & Roblox Setup and connect first.";
                         }
-                        // Hide the raw JSON block from the chat bubble, keep it human-readable
                         reply = reply.replace(/```core-action\s*[\s\S]*?```/i, "").trim();
                     }
 
-                    messages.push({
-                        role: "assistant",
-                        content: reply,
-                        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                    });
+                    messages.push({ role: "assistant", content: reply, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
                 } else {
                     messages.push({
-                        role: "assistant",
-                        content: "Error reaching Groq API: " + response.statusText + ". Please double-check your API key.",
-                        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                        error: true
+                        role: "assistant", content: "Error reaching Groq API: " + response.statusText + ". Please double-check your API key.",
+                        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), error: true
                     });
                 }
             } catch (err) {
                 thinkingBubble.classList.add('hidden');
                 messages.push({
-                    role: "assistant",
-                    content: "An unexpected network error occurred: " + err.message,
-                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                    error: true
+                    role: "assistant", content: "An unexpected network error occurred: " + err.message,
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), error: true
                 });
             }
 
@@ -643,7 +660,7 @@
         function renderMessages() {
             const list = document.getElementById('messagesList');
             const empty = document.getElementById('emptyState');
-            
+
             if (messages.length === 0) {
                 list.classList.add('hidden');
                 empty.classList.remove('hidden');
@@ -656,24 +673,22 @@
             list.innerHTML = messages.map(msg => {
                 const isUser = msg.role === 'user';
                 return `
-                    <div class="flex gap-4 ${isUser ? 'justify-end' : 'justify-start'}">
+                    <div class="flex gap-4 ${isUser ? 'justify-end' : 'justify-start'} msg-in">
                         ${!isUser ? `
                             <div class="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0">
                                 <span class="font-mono text-xs text-zinc-300 font-bold">C</span>
                             </div>
                         ` : ''}
-                        
+
                         <div class="flex flex-col max-w-[85%] ${isUser ? 'items-end' : 'items-start'}">
                             <div class="flex items-center gap-2 mb-1 px-1 font-mono text-[9px] text-zinc-500">
-                                <span>${isUser ? 'You' : 'Core'}</span>
-                                <span>•</span>
-                                <span>${msg.timestamp}</span>
+                                <span>${isUser ? 'You' : 'Core'}</span><span>•</span><span>${msg.timestamp}</span>
                             </div>
                             <div class="rounded-2xl px-4 py-3 border transition duration-150 text-sm leading-relaxed ${
-                                isUser 
-                                    ? 'bg-zinc-800 border-zinc-700 text-zinc-100' 
-                                    : msg.error 
-                                    ? 'bg-rose-950/20 border-rose-900/40 text-rose-200' 
+                                isUser
+                                    ? 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                                    : msg.error
+                                    ? 'bg-rose-950/20 border-rose-900/40 text-rose-200'
                                     : 'bg-neutral-900 border-zinc-900 text-zinc-300'
                             }">
                                 ${msg.content.replace(/\n/g, '<br>')}
@@ -689,7 +704,6 @@
                 `;
             }).join('');
 
-            // Scroll to bottom
             const scrollArea = document.getElementById('chatScrollArea');
             scrollArea.scrollTo({ top: scrollArea.scrollHeight, behavior: 'smooth' });
             lucide.createIcons();
@@ -721,9 +735,7 @@
             const icon = document.getElementById('micIcon');
 
             if (standaloneListening) {
-                if (standaloneRecognition) {
-                    standaloneRecognition.stop();
-                }
+                if (standaloneRecognition) standaloneRecognition.stop();
                 standaloneListening = false;
                 overlay.classList.add('hidden');
                 btn.className = "p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 transition duration-150 flex items-center justify-center h-12 w-12";
@@ -761,9 +773,7 @@
                         stopStandaloneListening();
                     };
 
-                    rec.onend = () => {
-                        stopStandaloneListening();
-                    };
+                    rec.onend = () => stopStandaloneListening();
 
                     standaloneRecognition = rec;
                     rec.start();
@@ -779,14 +789,13 @@
             const overlay = document.getElementById('listeningOverlay');
             const btn = document.getElementById('micBtn');
             const icon = document.getElementById('micIcon');
-            
+
             if (overlay) overlay.classList.add('hidden');
             if (btn) btn.className = "p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 transition duration-150 flex items-center justify-center h-12 w-12";
             if (icon) icon.setAttribute('data-lucide', 'mic');
             lucide.createIcons();
         }
 
-        // Initialize icons on load
         window.onload = () => {
             lucide.createIcons();
         };
