@@ -407,6 +407,11 @@
         // ===== Studio Bridge =====
         const BRIDGE_URL = "https://core-bridge-server.onrender.com"; // change to your deployed bridge server
         let bridgeCode = localStorage.getItem("coreBridgeCode") || null;
+        // Real-time truth about whether the plugin is actually polling right
+        // now (kept up to date by refreshBridgeStatus()). This — not just
+        // whether we have a paired code — is what gets told to the AI, so it
+        // stops guessing/hallucinating about its own connection state.
+        let studioOnline = false;
 
         async function connectStudioBridge(origin) {
             const inputId = origin === 'modal' ? 'bridgeCodeInput-modal' : 'bridgeCodeInput-sidebar';
@@ -468,6 +473,7 @@
         // to just trust whatever was cached in localStorage).
         async function refreshBridgeStatus() {
             if (!bridgeCode) {
+                studioOnline = false;
                 setBridgeStatus('offline');
                 return;
             }
@@ -476,15 +482,18 @@
                 if (!res.ok) {
                     // Code no longer exists on the server (expired / server restarted) — forget it.
                     bridgeCode = null;
+                    studioOnline = false;
                     localStorage.removeItem("coreBridgeCode");
                     setBridgeStatus('offline');
                     return;
                 }
                 const data = await res.json();
-                setBridgeStatus(data.studioOnline ? 'online' : 'waiting');
+                studioOnline = !!data.studioOnline;
+                setBridgeStatus(studioOnline ? 'online' : 'waiting');
             } catch (err) {
                 // Network error reaching the bridge server itself (e.g. it's
                 // asleep on Render's free tier and still spinning up).
+                studioOnline = false;
                 setBridgeStatus('waiting');
             }
         }
@@ -503,14 +512,36 @@
             }
         }
 
+        // More forgiving than a strict single-format regex: models don't
+        // always use the exact ```core-action fence we ask for. This tries
+        // the preferred fence first, then falls back to finding any raw
+        // {"action": ...} JSON object anywhere in the reply (fenced with a
+        // different label, or not fenced at all). Returns {action, raw} so
+        // the caller can still strip exactly what it found out of the
+        // displayed text, or null if nothing usable was found.
         function extractStudioAction(text) {
-            const match = text.match(/```core-action\s*([\s\S]*?)```/i);
-            if (!match) return null;
-            try {
-                return JSON.parse(match[1].trim());
-            } catch {
-                return null;
+            const fenced = [...text.matchAll(/```(?:[a-zA-Z-]*)\s*([\s\S]*?)```/g)];
+            for (const m of fenced) {
+                const candidate = m[1].trim();
+                if (!candidate.includes('"action"')) continue;
+                try { return { action: JSON.parse(candidate), raw: m[0] }; } catch {}
             }
+            const idx = text.indexOf('"action"');
+            if (idx === -1) return null;
+            const start = text.lastIndexOf('{', idx);
+            if (start === -1) return null;
+            let depth = 0;
+            for (let i = start; i < text.length; i++) {
+                if (text[i] === '{') depth++;
+                else if (text[i] === '}') {
+                    depth--;
+                    if (depth === 0) {
+                        const candidate = text.slice(start, i + 1);
+                        try { return { action: JSON.parse(candidate), raw: candidate }; } catch { return null; }
+                    }
+                }
+            }
+            return null;
         }
 
         // On load, don't trust the cached code — verify it against the
@@ -611,22 +642,32 @@
                     let reply = "";
                     const lower = text.toLowerCase();
                     if (lower.includes("ui") || lower.includes("menu") || lower.includes("screen") || lower.includes("button")) {
-                        if (bridgeCode) {
+                        if (studioOnline) {
                             sendStudioCommand({ action: "create_ui", className: "ScreenGui", name: "CoreAIMenu", root: "StarterGui" });
                             reply = "Done — I sent a `create_ui` command to your connected Studio session. A new ScreenGui named **CoreAIMenu** should appear under StarterGui.";
+                        } else if (bridgeCode) {
+                            reply = "I have a paired code, but I don't see Studio actively connected right now — make sure Studio is open with the Core AI plugin running, then try again.";
                         } else {
                             reply = "I'd scaffold that UI, but Studio isn't connected yet. Open the Connect section in MCP & Roblox Setup, grab the pairing code from the plugin, and connect.";
                         }
                     } else if (lower.includes("script") || lower.includes("module")) {
-                        if (bridgeCode) {
+                        if (studioOnline) {
                             sendStudioCommand({
                                 action: "create_script", scriptType: "ModuleScript", name: "CoreAIModule",
                                 root: "ReplicatedStorage", source: "local Module = {}\n\nreturn Module\n"
                             });
                             reply = "Done — I sent a `create_script` command to your connected Studio session. A new ModuleScript named **CoreAIModule** should appear in ReplicatedStorage.";
+                        } else if (bridgeCode) {
+                            reply = "I have a paired code, but I don't see Studio actively connected right now — make sure Studio is open with the Core AI plugin running, then try again.";
                         } else {
                             reply = "I'd create that script, but Studio isn't connected yet. Open the Connect section in MCP & Roblox Setup, grab the pairing code from the plugin, and connect.";
                         }
+                    } else if (lower.includes("connect")) {
+                        reply = studioOnline
+                            ? "Yes — Studio is connected and actively polling right now."
+                            : bridgeCode
+                            ? "I have a paired code saved, but Studio doesn't look actively connected right now (plugin not running, or Studio closed)."
+                            : "No, Studio isn't connected yet. Open MCP & Roblox Setup, grab the pairing code from the plugin, and connect.";
                     } else {
                         reply = "Hello! I am Core. I am operating in Standalone offline simulation mode because you haven't supplied a `GROQ_API_KEY` in the sidebar yet.\n\n" +
                                 "Please paste your key to communicate directly with my high-speed open-source Llama 3.3 models. Alternatively, ask me to scaffold a folder, script, or UI in Studio!";
@@ -638,6 +679,16 @@
             }
 
             try {
+                // Told to the model plainly, every request, so it never has
+                // to guess or recall stale info from earlier in the chat —
+                // this is what was making it hallucinate "not connected"
+                // answers before.
+                const liveStatusLine = studioOnline
+                    ? "CURRENT STATUS: Roblox Studio IS connected and online right now. You may emit action blocks."
+                    : bridgeCode
+                    ? "CURRENT STATUS: Studio is paired but NOT currently online (plugin not running or Studio closed). Tell the user this plainly if asked, and don't emit an action block — it would just queue uselessly."
+                    : "CURRENT STATUS: Studio is NOT connected. Tell the user this plainly if asked, and don't emit an action block.";
+
                 const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
                     method: "POST",
                     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
@@ -645,6 +696,7 @@
                         model: activeModel,
                         messages: [
                             { role: "system", content: "You are Core, an advanced, highly intelligent AI. Adopt a sophisticated, polite tone. " +
+                                liveStatusLine + " This status is authoritative — trust it over anything said earlier in the conversation.\n\n" +
                                 "You can control a connected Roblox Studio session, but ONLY through this exact mechanism, and ONLY with this " +
                                 "fixed vocabulary of actions — you can build structure, code, and UI, but you can NEVER create parts, meshes, " +
                                 "unions, or any 3D geometry (there is no action for that, and the plugin will refuse anything outside this list):\n\n" +
@@ -652,9 +704,13 @@
                                 "2. create_script — { \"action\":\"create_script\", \"root\":\"...\", \"path\":\"optional\", \"name\":\"ScriptName\", \"scriptType\":\"Script|LocalScript|ModuleScript\", \"source\":\"-- luau code\" }\n" +
                                 "3. create_ui — { \"action\":\"create_ui\", \"root\":\"...\", \"path\":\"optional\", \"name\":\"InstanceName\", \"className\":\"ScreenGui|Frame|ScrollingFrame|TextLabel|TextButton|TextBox|ImageLabel|ImageButton|UIListLayout|UIGridLayout|UIPadding|UICorner|UIStroke|UIAspectRatioConstraint|Folder\", \"properties\": { ...whitelisted properties like Text, Size, Position, BackgroundColor3 } }\n" +
                                 "4. delete_instance — { \"action\":\"delete_instance\", \"root\":\"...\", \"path\":\"optional\", \"name\":\"InstanceName\" }\n\n" +
-                                "Include AT MOST ONE fenced ```core-action block per reply, containing a single JSON object. " +
-                                "Only emit this block when the user actually wants a Studio change — never for normal conversation. " +
-                                "Write a short natural-language sentence around the block explaining what you did." },
+                                "CRITICAL FORMAT RULE: when the user wants a Studio change AND Studio is connected, your reply MUST contain " +
+                                "exactly one fenced code block that starts with the literal 3 backticks followed by the word core-action on " +
+                                "its own line, then the single JSON object, then 3 backticks to close it. Do not use any other fence label " +
+                                "(not ```json, not ```lua). Do not describe the JSON in prose instead of emitting it — always emit the real " +
+                                "fenced block when action is warranted. Only emit it when the user actually wants a Studio change — never for " +
+                                "normal conversation, and never when Studio isn't connected. Write a short natural-language sentence around " +
+                                "the block explaining what you did." },
                             ...messages.map(m => ({ role: m.role, content: m.content }))
                         ],
                         temperature: activeTemperature
@@ -667,15 +723,22 @@
                     const data = await response.json();
                     let reply = data.choices[0].message.content;
 
-                    const action = extractStudioAction(reply);
-                    if (action) {
-                        if (bridgeCode) {
-                            const result = await sendStudioCommand(action);
-                            reply += result.ok ? "\n\n✅ Sent to your connected Studio session." : "\n\n⚠️ Couldn't reach Studio — is the plugin running and connected?";
+                    const found = extractStudioAction(reply);
+                    if (found) {
+                        if (studioOnline) {
+                            const result = await sendStudioCommand(found.action);
+                            reply += result.ok ? "\n\n✅ Sent to your connected Studio session." : "\n\n⚠️ Couldn't reach the bridge server to deliver it — check that it's awake.";
+                        } else if (bridgeCode) {
+                            reply += "\n\n⚠️ Studio is paired but not currently online — make sure Studio is open with the plugin running, then ask again.";
                         } else {
                             reply += "\n\n⚠️ Studio isn't connected. Open MCP & Roblox Setup and connect first.";
                         }
-                        reply = reply.replace(/```core-action\s*[\s\S]*?```/i, "").trim();
+                        reply = reply.split(found.raw).join("").trim();
+                    } else if (/\baction\b/i.test(reply) && /create_(ui|script|folder)|delete_instance/i.test(reply)) {
+                        // The model clearly talked about building something but
+                        // never emitted a parseable block — surface that instead
+                        // of silently doing nothing, so it's obvious what failed.
+                        reply += "\n\n⚠️ I described a Studio action but didn't format it correctly to send — try rephrasing your request, e.g. \"create a ScreenGui menu\".";
                     }
 
                     messages.push({ role: "assistant", content: reply, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
