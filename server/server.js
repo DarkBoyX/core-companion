@@ -49,6 +49,7 @@ app.post("/api/session/create", (req, res) => {
   const code = makeCode();
   sessions.set(code, {
     commands: [],
+    results: [],           // messages the Studio plugin reports back (playtest logs, script reads)
     lastSeen: Date.now(),   // last time the Studio plugin actually polled us
     createdAt: Date.now(),
     robloxUser: null,       // set once the website "links" this code
@@ -85,12 +86,18 @@ app.get("/api/session/status", (req, res) => {
 //
 // NOTE: this whitelist intentionally excludes anything geometry-related.
 // The AI can build structure (folders), code (scripts), and UI — never
-// parts, meshes, unions, or any 3D object.
+// parts, meshes, unions, or any 3D object. It can also edit/read existing
+// scripts, and start/stop a playtest session (gated behind explicit user
+// approval on the website side before start_playtest is ever sent here).
 const ALLOWED_ACTIONS = new Set([
   "create_folder",
   "create_script",
+  "edit_script",
+  "read_script",
   "create_ui",
   "delete_instance",
+  "start_playtest",
+  "stop_playtest",
 ]);
 
 const ALLOWED_ROOTS = new Set([
@@ -128,6 +135,33 @@ app.get("/api/roblox/poll", (req, res) => {
   const commands = session.commands;
   session.commands = [];
   res.json({ commands });
+});
+
+// --- 5. Studio plugin reports results back (script contents, playtest
+// error/output logs, action confirmations) after it acts on a command ---
+// or on its own (e.g. streaming playtest output while a session runs).
+const ALLOWED_RESULT_TYPES = new Set(["script_content", "playtest_report", "playtest_log"]);
+
+app.post("/api/roblox/result", (req, res) => {
+  const { code, result } = req.body;
+  const session = sessions.get(code);
+  if (!session) return res.status(404).json({ error: "Unknown or expired code" });
+  if (!result || !ALLOWED_RESULT_TYPES.has(result.type)) {
+    return res.status(400).json({ error: "Rejected: result type not in whitelist" });
+  }
+  session.lastSeen = Date.now();
+  session.results.push({ ...result, receivedAt: Date.now() });
+  res.json({ ok: true });
+});
+
+// --- 6. Website polls this to pick up whatever Studio has reported back ---
+app.get("/api/roblox/results", (req, res) => {
+  const { code } = req.query;
+  const session = sessions.get(code);
+  if (!session) return res.status(404).json({ error: "Unknown or expired code" });
+  const results = session.results;
+  session.results = [];
+  res.json({ results });
 });
 
 // --- Optional: Roblox OAuth callback (fill in your own Client ID/Secret) ---
