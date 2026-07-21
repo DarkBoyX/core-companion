@@ -48,22 +48,39 @@ app.get("/api/session/status", (req, res) => {
 });
 
 // --- 3. Website pushes a structured command after the AI decides on one ---
+//
+// NOTE: this whitelist intentionally excludes anything geometry-related.
+// The AI can build structure (folders), code (scripts), and UI — never
+// parts, meshes, unions, or any 3D object.
 const ALLOWED_ACTIONS = new Set([
-  "create_part",
-  "set_color",
-  "set_size",
-  "set_position",
-  "delete_part",
-  "delete_all",
+  "create_folder",
+  "create_script",
+  "create_ui",
+  "delete_instance",
+]);
+
+const ALLOWED_ROOTS = new Set([
+  "ReplicatedStorage",
+  "ServerScriptService",
+  "StarterGui",
+  "StarterPlayerScripts",
 ]);
 
 app.post("/api/roblox/command", (req, res) => {
   const { code, command } = req.body;
   const session = sessions.get(code);
   if (!session) return res.status(404).json({ error: "Unknown or expired code" });
+
   if (!command || !ALLOWED_ACTIONS.has(command.action)) {
     return res.status(400).json({ error: "Rejected: action not in whitelist" });
   }
+  // root is required for every action except create_ui targeting ScreenGui
+  // (the plugin pins ScreenGuis to StarterGui itself), but we still sanity
+  // check it here when present so obviously-bad payloads are rejected early.
+  if (command.root && !ALLOWED_ROOTS.has(command.root)) {
+    return res.status(400).json({ error: "Rejected: root not in whitelist" });
+  }
+
   session.commands.push(command);
   res.json({ ok: true, queued: session.commands.length });
 });
