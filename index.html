@@ -422,7 +422,11 @@
                 if (res.ok) {
                     bridgeCode = code;
                     localStorage.setItem("coreBridgeCode", code);
-                    setBridgeStatus(true);
+                    // Re-check the real status right away instead of assuming
+                    // "connected" just because the code was valid — the code
+                    // being valid only proves Studio created a session at
+                    // some point, not that it's online right now.
+                    await refreshBridgeStatus();
                 } else {
                     alert("Couldn't find that code. Check the plugin panel in Studio and try again.");
                 }
@@ -431,26 +435,57 @@
             }
         }
 
-        function setBridgeStatus(connected) {
-            const dotClass = connected ? "bg-emerald-500" : "bg-rose-500";
-            const textClass = connected
-                ? "text-[11px] font-mono text-emerald-400 flex items-center gap-1.5"
-                : "text-[11px] font-mono text-rose-400 flex items-center gap-1.5";
-            const label = connected ? "Connected to Studio" : "Not connected";
+        // Source of truth for connection UI. Three real states:
+        //  - "offline"   : no paired code, or code invalid/expired
+        //  - "waiting"   : code is paired, but the Studio plugin hasn't
+        //                  polled recently (Studio closed / not running)
+        //  - "online"    : code is paired AND the plugin polled within
+        //                  the last few seconds
+        function setBridgeStatus(state) {
+            const config = {
+                offline: { dot: "bg-rose-500", color: "text-rose-400", label: "Not connected", chip: "Studio disconnected" },
+                waiting: { dot: "bg-amber-400", color: "text-amber-400", label: "Waiting for Studio...", chip: "Waiting for Studio" },
+                online:  { dot: "bg-emerald-500", color: "text-emerald-400", label: "Connected to Studio", chip: "Studio connected" },
+            }[state] || { dot: "bg-rose-500", color: "text-rose-400", label: "Not connected", chip: "Studio disconnected" };
 
             ['bridgeStatus-sidebar', 'bridgeStatus-modal'].forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
-                el.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${dotClass}"></span> ${label}`;
-                el.className = textClass;
+                el.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${config.dot}"></span> ${config.label}`;
+                el.className = `text-[11px] font-mono ${config.color} flex items-center gap-1.5`;
             });
 
             const chip = document.getElementById('headerBridgeChip');
             if (chip) {
-                chip.className = connected
-                    ? "hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-emerald-400"
-                    : "hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-rose-400";
-                chip.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${dotClass}"></span> ${connected ? "Studio connected" : "Studio disconnected"}`;
+                chip.className = `hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[10px] font-mono ${config.color}`;
+                chip.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${config.dot}"></span> ${config.chip}`;
+            }
+        }
+
+        // Actually asks the bridge server whether this code is valid and
+        // whether the plugin is currently polling, then updates the UI to
+        // match reality — this is what was missing before (the page used
+        // to just trust whatever was cached in localStorage).
+        async function refreshBridgeStatus() {
+            if (!bridgeCode) {
+                setBridgeStatus('offline');
+                return;
+            }
+            try {
+                const res = await fetch(`${BRIDGE_URL}/api/session/status?code=${encodeURIComponent(bridgeCode)}`);
+                if (!res.ok) {
+                    // Code no longer exists on the server (expired / server restarted) — forget it.
+                    bridgeCode = null;
+                    localStorage.removeItem("coreBridgeCode");
+                    setBridgeStatus('offline');
+                    return;
+                }
+                const data = await res.json();
+                setBridgeStatus(data.studioOnline ? 'online' : 'waiting');
+            } catch (err) {
+                // Network error reaching the bridge server itself (e.g. it's
+                // asleep on Render's free tier and still spinning up).
+                setBridgeStatus('waiting');
             }
         }
 
@@ -478,7 +513,11 @@
             }
         }
 
-        if (bridgeCode) setBridgeStatus(true);
+        // On load, don't trust the cached code — verify it against the
+        // server, then keep polling every few seconds so the badge stays
+        // accurate if Studio closes or the bridge server goes to sleep.
+        refreshBridgeStatus();
+        setInterval(refreshBridgeStatus, 4000);
 
         // UI toggles
         function toggleSidebar() {
