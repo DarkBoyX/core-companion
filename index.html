@@ -398,6 +398,35 @@
         </div>
     </div>
 
+    <!-- Playtest Approval Modal -->
+    <div id="playtestModal" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 hidden">
+        <div class="w-full max-w-sm bg-neutral-950 border border-zinc-800 rounded-2xl overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.9)] core-glow">
+            <div class="p-5 border-b border-zinc-900 flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0">
+                    <i data-lucide="play-circle" class="w-4.5 h-4.5 text-amber-400"></i>
+                </div>
+                <div>
+                    <h2 class="font-sans text-sm font-semibold tracking-wide text-zinc-100">Playtest Request</h2>
+                    <p class="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Requires your approval</p>
+                </div>
+            </div>
+            <div class="p-5 space-y-4">
+                <p class="text-xs text-zinc-400 leading-relaxed">
+                    Core wants to <span class="text-zinc-200 font-medium">playtest your game in Roblox Studio</span> to check for errors and bugs.
+                    Studio will enter Play mode on your machine until Core stops it or you stop it manually.
+                </p>
+                <div class="flex gap-2">
+                    <button onclick="denyPlaytest()" class="flex-1 p-2.5 bg-zinc-900 border border-zinc-800 text-zinc-300 font-semibold text-xs rounded-lg hover:bg-zinc-800 transition cursor-pointer">
+                        Deny
+                    </button>
+                    <button onclick="approvePlaytest()" class="flex-1 p-2.5 bg-zinc-100 text-black font-semibold text-xs rounded-lg hover:bg-white transition cursor-pointer">
+                        Approve
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- === SCRIPT SYSTEM LOGIC === -->
     <script>
         let activeModel = "gemini-3.6-flash";
@@ -412,6 +441,7 @@
         // whether we have a paired code — is what gets told to the AI, so it
         // stops guessing/hallucinating about its own connection state.
         let studioOnline = false;
+        let playtestRunning = false;
 
         async function connectStudioBridge(origin) {
             const inputId = origin === 'modal' ? 'bridgeCodeInput-modal' : 'bridgeCodeInput-sidebar';
@@ -511,6 +541,104 @@
                 return { ok: false, reason: err.message };
             }
         }
+
+        // ===== Playtest approval flow =====
+        // The AI can never start a playtest on its own — it can only ask.
+        // showPlaytestModal() is the sole entry point into an actual
+        // start_playtest command being queued for Studio.
+        function showPlaytestModal() {
+            document.getElementById('playtestModal').classList.remove('hidden');
+        }
+        function hidePlaytestModal() {
+            document.getElementById('playtestModal').classList.add('hidden');
+        }
+
+        async function approvePlaytest() {
+            hidePlaytestModal();
+            const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            if (!studioOnline) {
+                messages.push({ role: "assistant", content: "⚠️ You approved the playtest, but Studio isn't currently online — open Studio with the plugin running and ask me to try again.", timestamp });
+                renderMessages();
+                return;
+            }
+            const result = await sendStudioCommand({ action: "start_playtest" });
+            playtestRunning = !!result.ok;
+            messages.push({
+                role: "assistant",
+                content: result.ok
+                    ? "▶️ You approved it — playtest started in Studio. I'll report back what I find (or you can stop it any time)."
+                    : "⚠️ You approved it, but I couldn't reach the bridge server to start the playtest.",
+                timestamp
+            });
+            renderMessages();
+        }
+
+        function denyPlaytest() {
+            hidePlaytestModal();
+            messages.push({
+                role: "assistant",
+                content: "Understood — I won't playtest the game. Let me know if you'd like me to review the scripts instead, or ask again later.",
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            });
+            renderMessages();
+        }
+
+        async function stopPlaytest() {
+            if (!studioOnline) return;
+            await sendStudioCommand({ action: "stop_playtest" });
+            playtestRunning = false;
+            messages.push({
+                role: "assistant",
+                content: "⏹️ Playtest stopped.",
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            });
+            renderMessages();
+        }
+
+        // Picks up whatever Studio has reported back since the last poll:
+        // script contents from read_script, and bug/error reports from a
+        // running playtest. This is the only path errors get surfaced on.
+        async function pollStudioResults() {
+            if (!bridgeCode) return;
+            try {
+                const res = await fetch(`${BRIDGE_URL}/api/roblox/results?code=${bridgeCode}`);
+                if (!res.ok) return;
+                const { results } = await res.json();
+                if (!results || results.length === 0) return;
+
+                for (const r of results) {
+                    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    if (r.type === "script_content") {
+                        messages.push({
+                            role: "assistant",
+                            content: `📄 Read **${r.name || 'script'}**:\n\n\`\`\`lua\n${r.source || ''}\n\`\`\``,
+                            timestamp
+                        });
+                    } else if (r.type === "playtest_report") {
+                        playtestRunning = false;
+                        const errorCount = Array.isArray(r.errors) ? r.errors.length : 0;
+                        const errorList = errorCount
+                            ? r.errors.map(e => `- ${e}`).join("\n")
+                            : "No errors reported. 🎉";
+                        messages.push({
+                            role: "assistant",
+                            content: `🧪 Playtest finished — ${errorCount} error${errorCount === 1 ? '' : 's'} found.\n\n${errorList}`,
+                            timestamp
+                        });
+                    } else if (r.type === "playtest_log") {
+                        messages.push({
+                            role: "assistant",
+                            content: `🧪 Playtest log: ${r.message || ''}`,
+                            timestamp
+                        });
+                    }
+                }
+                renderMessages();
+            } catch (err) {
+                // Silent — this is a background poll, not a user action.
+            }
+        }
+        setInterval(pollStudioResults, 3000);
 
         // More forgiving than a strict single-format regex: models don't
         // always use the exact ```core-action fence we ask for. This tries
@@ -697,7 +825,11 @@
                     "1. create_folder — { \"action\":\"create_folder\", \"root\":\"ReplicatedStorage|ServerScriptService|StarterGui|StarterPlayerScripts\", \"path\":\"optional.dotted.path\", \"name\":\"FolderName\" }\n" +
                     "2. create_script — { \"action\":\"create_script\", \"root\":\"...\", \"path\":\"optional\", \"name\":\"ScriptName\", \"scriptType\":\"Script|LocalScript|ModuleScript\", \"source\":\"-- luau code\" }\n" +
                     "3. create_ui — { \"action\":\"create_ui\", \"root\":\"...\", \"path\":\"optional\", \"name\":\"InstanceName\", \"className\":\"ScreenGui|Frame|ScrollingFrame|TextLabel|TextButton|TextBox|ImageLabel|ImageButton|UIListLayout|UIGridLayout|UIPadding|UICorner|UIStroke|UIAspectRatioConstraint|Folder\", \"properties\": { ...whitelisted properties like Text, Size, Position, BackgroundColor3 } }\n" +
-                    "4. delete_instance — { \"action\":\"delete_instance\", \"root\":\"...\", \"path\":\"optional\", \"name\":\"InstanceName\" }\n\n" +
+                    "4. delete_instance — { \"action\":\"delete_instance\", \"root\":\"...\", \"path\":\"optional\", \"name\":\"InstanceName\" }\n" +
+                    "5. edit_script — overwrite an existing script's source. { \"action\":\"edit_script\", \"root\":\"...\", \"path\":\"optional\", \"name\":\"ScriptName\", \"source\":\"-- full new luau code\" }\n" +
+                    "6. read_script — request the current source of an existing script before editing it, so you don't overwrite blind. { \"action\":\"read_script\", \"root\":\"...\", \"path\":\"optional\", \"name\":\"ScriptName\" }. The result comes back asynchronously as a message in the chat — wait for it before emitting an edit_script for that same script.\n" +
+                    "7. request_playtest — ask the user's permission to enter Play mode in Studio to check the game for errors. { \"action\":\"request_playtest\" }. This ALWAYS shows the user an approve/deny popup first — you never get direct control, so don't claim you're playtesting until you see a message confirming the user approved it. Use this when the user asks you to test the game, check for bugs, or verify something actually works at runtime.\n" +
+                    "8. stop_playtest — end an approved, currently-running playtest session. { \"action\":\"stop_playtest\" }. Only emit this after a playtest was approved and started.\n\n" +
                     "CRITICAL FORMAT RULE: when the user wants a Studio change AND Studio is connected, your reply MUST contain " +
                     "exactly one fenced code block that starts with the literal 3 backticks followed by the word core-action on " +
                     "its own line, then the single JSON object, then 3 backticks to close it. Do not use any other fence label " +
@@ -729,7 +861,14 @@
                     let reply = data.candidates?.[0]?.content?.parts?.map(p => p.text).join("") || "";
 
                     const found = extractStudioAction(reply);
-                    if (found) {
+                    if (found && found.action.action === "request_playtest") {
+                        // Never auto-send this one — always route through the
+                        // approval modal, regardless of studioOnline state,
+                        // since approval is a user decision, not a connectivity check.
+                        reply += "\n\n⏸️ Waiting on your approval to playtest — check the popup.";
+                        reply = reply.split(found.raw).join("").trim();
+                        showPlaytestModal();
+                    } else if (found) {
                         if (studioOnline) {
                             const result = await sendStudioCommand(found.action);
                             reply += result.ok ? "\n\n✅ Sent to your connected Studio session." : "\n\n⚠️ Couldn't reach the bridge server to deliver it — check that it's awake.";
@@ -739,7 +878,7 @@
                             reply += "\n\n⚠️ Studio isn't connected. Open MCP & Roblox Setup and connect first.";
                         }
                         reply = reply.split(found.raw).join("").trim();
-                    } else if (/\baction\b/i.test(reply) && /create_(ui|script|folder)|delete_instance/i.test(reply)) {
+                    } else if (/\baction\b/i.test(reply) && /create_(ui|script|folder)|delete_instance|edit_script|read_script|(?:request|stop)_playtest/i.test(reply)) {
                         // The model clearly talked about building something but
                         // never emitted a parseable block — surface that instead
                         // of silently doing nothing, so it's obvious what failed.
